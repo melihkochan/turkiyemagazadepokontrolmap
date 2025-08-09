@@ -13,6 +13,15 @@ export default function Page() {
   return (
     <main className="min-h-screen w-full">
       <div className="mx-auto w-full max-w-[1680px] px-2 py-2">
+        {/* Ana Başlık */}
+        <div className="text-center mb-6">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            🗺️ Türkiye Map Kontrol
+          </h1>
+          <p className="text-gray-600">
+            Depo Konumları ve Kapsama Alanları Görüntüleme Sistemi
+          </p>
+        </div>
         {/* Tab Navigation */}
         <div className="mb-6 flex gap-2">
           <Button
@@ -48,6 +57,23 @@ export default function Page() {
             storeCounts={storeCounts}
           />
         )}
+        
+        {/* Footer - Geliştirici Bilgileri */}
+        <footer className="mt-8 pt-4 border-t border-gray-200">
+          <div className="text-center text-sm text-gray-600">
+            <p>
+              Developed by{" "}
+              <a 
+                href="https://www.melihkochan.com/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+              >
+                Melih KOÇHAN
+              </a>
+            </p>
+          </div>
+        </footer>
       </div>
     </main>
   )

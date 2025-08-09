@@ -4,9 +4,8 @@ import { GeistMono } from 'geist/font/mono'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
-  generator: 'v0.dev',
+  title: 'Türkiye Map Kontrol - Depo Konumları ve Kapsama Alanları',
+  description: 'Türkiye ve Dünya haritası üzerinde depo konumları ve kapsama alanlarını görüntüleme sistemi',
 }
 
 export default function RootLayout({
