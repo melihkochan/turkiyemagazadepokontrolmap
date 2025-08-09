@@ -117,6 +117,10 @@ export default function TurkeyMap({
   const [searchEditor, setSearchEditor] = useState("")
 
   const getRingColor = (id: string) => {
+    // Gaziantep ve Diyarbakır için kırmızı renk
+    if (id === "gaziantep" || id === "diyarbakir") {
+      return "#ef4444" // Kırmızı renk
+    }
     const idx = selectedCityIds.indexOf(id)
     return RING_PALETTE[(idx >= 0 ? idx : 0) % RING_PALETTE.length]
   }

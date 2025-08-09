@@ -15,11 +15,15 @@ export default function Page() {
       <div className="mx-auto w-full max-w-[1680px] px-2 py-2">
         {/* Ana Başlık */}
         <div className="text-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            🗺️ Türkiye Map Kontrol
-          </h1>
-          <p className="text-gray-600">
-            Depo Konumları ve Kapsama Alanları Görüntüleme Sistemi
+          <div className="flex items-center justify-center gap-4 mb-4">
+            <img 
+              src="/images/gratis-logo.png" 
+              alt="Gratis Logo" 
+              className="h-16 w-auto"
+            />
+          </div>
+          <p className="text-gray-600 text-lg font-medium">
+            Gratis Depo Konum Dağılımı
           </p>
         </div>
         {/* Tab Navigation */}
