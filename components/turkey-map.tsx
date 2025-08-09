@@ -375,7 +375,7 @@ export default function TurkeyMap({
         </CardHeader>
         <CardContent>
           <div className={cn("relative w-full", mapHeightClass)}>
-            <div ref={containerRef} className={cn("absolute inset-0 w-full", "border rounded")} />
+            <div ref={containerRef} className={cn("absolute inset-0 w-full")} />
             {loading && (
               <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">Yükleniyor…</div>
             )}
