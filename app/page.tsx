@@ -12,22 +12,22 @@ export default function Page() {
 
   return (
     <main className="min-h-screen w-full">
-      <div className="mx-auto w-full max-w-[1680px] px-2 py-2">
+      <div className="mx-auto w-full max-w-[1400px] px-2 py-1">
         {/* Ana Başlık */}
-        <div className="text-center mb-6">
-          <div className="flex items-center justify-center gap-4 mb-4">
+        <div className="text-center mb-3">
+          <div className="flex items-center justify-center gap-2 mb-2">
             <img 
               src="/images/gratis-logo.png" 
               alt="Gratis Logo" 
-              className="h-16 w-auto"
+              className="h-10 w-auto"
             />
           </div>
-          <p className="text-gray-600 text-lg font-medium">
+          <p className="text-gray-600 text-sm font-medium">
             Gratis Depo Konum Dağılımı
           </p>
         </div>
         {/* Tab Navigation */}
-        <div className="mb-6 flex gap-2">
+        <div className="mb-3 flex gap-2">
           <Button
             variant={activeTab === "turkey" ? "default" : "outline"}
             onClick={() => setActiveTab("turkey")}
@@ -50,7 +50,7 @@ export default function Page() {
             defaultSelectedCityIds={depotCityIds}
             defaultRadiusKm={150}
             storeCounts={storeCounts}
-            mapHeightClass="min-h-[88vh]"
+            mapHeightClass="min-h-[65vh]"
           />
         )}
 
@@ -63,8 +63,8 @@ export default function Page() {
         )}
         
         {/* Footer - Geliştirici Bilgileri */}
-        <footer className="mt-8 pt-4 border-t border-gray-200">
-          <div className="text-center text-sm text-gray-600">
+        <footer className="mt-4 pt-2 border-t border-gray-200">
+          <div className="text-center text-xs text-gray-500">
             <p>
               Developed by{" "}
               <a 
