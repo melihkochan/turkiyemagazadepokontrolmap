@@ -22,12 +22,6 @@ export const supabase = createClient(finalUrl, finalKey, {
   }
 })
 
-// Client oluşturuldu mu kontrol et
-if (supabase) {
-  console.log('✅ Supabase client başarıyla oluşturuldu')
-} else {
-  console.warn('❌ Supabase client oluşturulamadı')
-}
 
 // Şehir mağaza sayıları için tip tanımı
 export interface CityStoreCount {
