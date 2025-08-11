@@ -133,3 +133,70 @@ export async function updateMultipleCityStoreCounts(
     return false
   }
 }
+
+// Tablo oluştur ve test verileri ekle
+export async function initializeDatabase(): Promise<boolean> {
+  try {
+    if (!supabase) {
+      console.warn('Supabase client bulunamadı, tablo oluşturulamıyor')
+      return false
+    }
+    
+    console.log('Veritabanı başlatılıyor...')
+    
+    // Önce mevcut verileri kontrol et
+    const { data: existingData, error: checkError } = await supabase
+      .from('city_store_counts')
+      .select('*')
+      .limit(1)
+    
+    if (checkError) {
+      console.log('Tablo bulunamadı, oluşturuluyor...')
+      
+      // SQL ile tablo oluştur (eğer yoksa)
+      const { error: createError } = await supabase.rpc('create_city_store_counts_table')
+      
+      if (createError) {
+        console.log('RPC ile tablo oluşturulamadı, manuel oluşturuluyor...')
+        // Manuel olarak veri eklemeye çalış
+      }
+    }
+    
+    // Test verileri ekle
+    const testData = [
+      { city_id: "istanbul-avr", store_count: 25 },
+      { city_id: "istanbul-and", store_count: 18 },
+      { city_id: "ankara", store_count: 15 },
+      { city_id: "antalya", store_count: 12 },
+      { city_id: "bursa", store_count: 8 },
+      { city_id: "diyarbakir", store_count: 6 },
+      { city_id: "düzce", store_count: 4 },
+      { city_id: "erzurum", store_count: 5 },
+      { city_id: "eskisehir", store_count: 7 },
+      { city_id: "gaziantep", store_count: 9 },
+      { city_id: "izmir", store_count: 14 },
+      { city_id: "kayseri", store_count: 6 },
+      { city_id: "konya", store_count: 8 },
+      { city_id: "muğla", store_count: 5 },
+      { city_id: "samsun", store_count: 7 },
+      { city_id: "trabzon", store_count: 6 },
+      { city_id: "adana", store_count: 10 }
+    ]
+    
+    const { error: insertError } = await supabase
+      .from('city_store_counts')
+      .upsert(testData, { onConflict: 'city_id' })
+    
+    if (insertError) {
+      console.error('Test verileri eklenirken hata:', insertError)
+      return false
+    }
+    
+    console.log('Veritabanı başarıyla başlatıldı!')
+    return true
+    
+  } catch (error) {
+    console.error('Veritabanı başlatma hatası:', error)
+    return false
+  }
+}

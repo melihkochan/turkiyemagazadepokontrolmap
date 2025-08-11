@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils"
 import { referenceColors } from "@/data/reference-colors"
 import { depotCityIds as defaultDepots } from "@/data/depot-cities"
 import { depotCityCoords } from "@/data/depot-coordinates"
-import { getCityStoreCounts, updateCityStoreCount, updateMultipleCityStoreCounts } from "@/lib/supabase"
+import { getCityStoreCounts, updateCityStoreCount, updateMultipleCityStoreCounts, initializeDatabase } from "@/lib/supabase"
 import jsPDF from "jspdf"
 
 const RING_PALETTE = [
@@ -239,6 +239,22 @@ export default function TurkeyMap({
       console.log('Veritabanından veriler yüklendi:', dbCounts)
     } catch (error) {
       console.error('Veri yükleme hatası:', error)
+    } finally {
+      setDbLoading(false)
+    }
+  }
+
+  // Veritabanını başlat
+  const initializeDatabaseHandler = async () => {
+    setDbLoading(true)
+    try {
+      const success = await initializeDatabase()
+      if (success) {
+        // Başlatıldıktan sonra verileri yükle
+        await loadFromDatabase()
+      }
+    } catch (error) {
+      console.error('Veritabanı başlatma hatası:', error)
     } finally {
       setDbLoading(false)
     }
@@ -586,22 +602,31 @@ export default function TurkeyMap({
                    </div>
                  </div>
                  
-                 <Button 
-                   variant="outline" 
-                   onClick={loadFromDatabase}
-                   disabled={dbLoading}
-                   className="bg-white border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
-                 >
-                   {dbLoading ? "⏳ Yükleniyor..." : "🗄️ Veritabanından Yükle"}
-                 </Button>
-                 
-                 <Button 
-                   variant="outline" 
-                   onClick={() => setCounts({})}
-                   className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400"
-                 >
-                   🗑️ Temizle
-                 </Button>
+                                   <Button 
+                    variant="outline" 
+                    onClick={initializeDatabaseHandler}
+                    disabled={dbLoading}
+                    className="bg-white border-green-300 text-green-700 hover:bg-green-50 hover:border-green-400"
+                  >
+                    {dbLoading ? "⏳ Başlatılıyor..." : "🚀 Veritabanını Başlat"}
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    onClick={loadFromDatabase}
+                    disabled={dbLoading}
+                    className="bg-white border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
+                  >
+                    {dbLoading ? "⏳ Yükleniyor..." : "🗄️ Veritabanından Yükle"}
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setCounts({})}
+                    className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400"
+                  >
+                    🗑️ Temizle
+                  </Button>
                </div>
              </div>
 
