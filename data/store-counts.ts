@@ -1,20 +1,15 @@
-// Varsayılan mağaza sayıları - Supabase'den gerçek veriler yüklendiğinde bu değerler güncellenir
-export const storeCounts: Record<string, number> = {
-  "İstanbul - AND": 0,
-  "İstanbul - AVR": 0,
-  "ankara": 0,
-  "antalya": 0,
-  "bursa": 0,
-  "diyarbakir": 0,
-  "düzce": 0,
-  "erzurum": 0,
-  "eskisehir": 0,
-  "gaziantep": 0,
-  "izmir": 0,
-  "kayseri": 0,
-  "konya": 0,
-  "muğla": 0,
-  "samsun": 0,
-  "trabzon": 0,
-  "adana": 0,
+import { getCityStoreCounts } from "@/lib/supabase"
+
+// Dinamik olarak veritabanından mağaza sayılarını getir
+export async function getDynamicStoreCounts(): Promise<Record<string, number>> {
+  try {
+    return await getCityStoreCounts()
+  } catch (error) {
+    console.error('Dinamik veri çekme hatası:', error)
+    // Hata durumunda boş obje döndür
+    return {}
+  }
 }
+
+// Boş store counts (fallback için)
+export const storeCounts: Record<string, number> = {}

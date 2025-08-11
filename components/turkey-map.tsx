@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils"
 import { referenceColors } from "@/data/reference-colors"
 import { depotCityIds as defaultDepots } from "@/data/depot-cities"
 import { depotCityCoords } from "@/data/depot-coordinates"
+import { getDynamicStoreCounts } from "@/data/store-counts"
 import { getCityStoreCounts, updateCityStoreCount, updateMultipleCityStoreCounts, initializeDatabase } from "@/lib/supabase"
 import jsPDF from "jspdf"
 
@@ -233,7 +234,7 @@ export default function TurkeyMap({
         key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? '***' : 'undefined'
       })
       
-      const dbCounts = await getCityStoreCounts()
+      const dbCounts = await getDynamicStoreCounts()
       setCounts(dbCounts)
       console.log('Veritabanından veriler yüklendi:', dbCounts)
     } catch (error) {
