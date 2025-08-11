@@ -213,6 +213,17 @@ export default function TurkeyMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Component mount olduğunda veritabanından verileri otomatik yükle
+  useEffect(() => {
+    console.log('Component mount - veritabanından veriler yükleniyor...')
+    console.log('Environment variables check:', {
+      url: process.env.NEXT_PUBLIC_SUPABASE_URL,
+      hasKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      env: process.env.NODE_ENV
+    })
+    loadFromDatabase()
+  }, [])
+
   // Sayfa yüklendiğinde veritabanından veri çek
   useEffect(() => {
     // Environment variable'ları kontrol et

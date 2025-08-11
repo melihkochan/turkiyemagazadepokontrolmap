@@ -14,6 +14,13 @@ export const supabase = supabaseUrl && supabaseAnonKey
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null
 
+// Client oluşturuldu mu kontrol et
+if (supabase) {
+  console.log('✅ Supabase client başarıyla oluşturuldu')
+} else {
+  console.warn('❌ Supabase client oluşturulamadı - environment variables eksik')
+}
+
 // Şehir mağaza sayıları için tip tanımı
 export interface CityStoreCount {
   id: number
@@ -32,6 +39,8 @@ export async function getCityStoreCounts(): Promise<Record<string, number>> {
       return {}
     }
     
+    console.log('Supabase client bulundu, veriler çekiliyor...')
+    
     const { data, error } = await supabase
       .from('city_store_counts')
       .select('city_id, store_count')
@@ -42,12 +51,16 @@ export async function getCityStoreCounts(): Promise<Record<string, number>> {
       return {}
     }
     
+    console.log('Veritabanından gelen ham veriler:', data)
+    
     // Record<string, number> formatına çevir
     const counts: Record<string, number> = {}
     data?.forEach(row => {
       counts[row.city_id] = row.store_count
+      console.log(`Şehir: ${row.city_id}, Mağaza sayısı: ${row.store_count}`)
     })
     
+    console.log('İşlenmiş veriler:', counts)
     return counts
   } catch (error) {
     console.error('Veri çekme hatası:', error)
@@ -164,8 +177,8 @@ export async function initializeDatabase(): Promise<boolean> {
     
     // Test verileri ekle
     const testData = [
-      { city_id: "istanbul-avr", store_count: 25 },
-      { city_id: "istanbul-and", store_count: 18 },
+      { city_id: "İstanbul - AVR", store_count: 25 },
+      { city_id: "İstanbul - AND", store_count: 18 },
       { city_id: "ankara", store_count: 15 },
       { city_id: "antalya", store_count: 12 },
       { city_id: "bursa", store_count: 8 },
