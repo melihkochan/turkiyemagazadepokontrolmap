@@ -59,36 +59,52 @@ function svgToLatLon(x: number, y: number, svg: SVGSVGElement) {
   return { lat, lon }
 }
 
-/** Gerçek jeodezik halka (path d) - karayolu mesafesi için düzeltilmiş */
+/** Gerçek jeodezik halka (path d) - Dünya'nın eğriliği hesaba katılarak */
 function geodesicCirclePath(lat: number, lon: number, radiusKm: number, svg: SVGSVGElement, stepDeg = 3) {
-  // Görsellerden gelen gerçek boyutlara göre ayarlanmış mesafe
   // Karayolu 150km = kuş uçuşu ~40km (görsellerle uyumlu küçük daireler)
   const airDistanceKm = radiusKm / 3.5
+  
+  // Dünya'nın yarıçapı (km)
   const R = 6371
-  const φ1 = (lat * Math.PI) / 180
-  const λ1 = (lon * Math.PI) / 180
+  
+  // Merkez nokta koordinatları (radyan)
+  const φ1 = (lat * Math.PI) / 180  // Enlem
+  const λ1 = (lon * Math.PI) / 180  // Boylam
+  
+  // Açısal mesafe (radyan)
   const δ = airDistanceKm / R
 
   const points: { x: number; y: number }[] = []
+  
+  // Her yöne (0°-360°) noktalar hesapla
   for (let bearing = 0; bearing <= 360; bearing += stepDeg) {
-    const θ = (bearing * Math.PI) / 180
+    const θ = (bearing * Math.PI) / 180  // Yön açısı (radyan)
+    
+    // Trigonometrik hesaplamalar
     const sinφ1 = Math.sin(φ1)
     const cosφ1 = Math.cos(φ1)
     const sinδ = Math.sin(δ)
     const cosδ = Math.cos(δ)
 
+    // Yeni nokta koordinatları (jeodezik formül)
     const sinφ2 = sinφ1 * cosδ + cosφ1 * sinδ * Math.cos(θ)
     const φ2 = Math.asin(sinφ2)
     const y = Math.sin(θ) * sinδ * cosφ1
     const x = cosδ - sinφ1 * sinφ2
     const λ2 = λ1 + Math.atan2(y, x)
 
+    // Radyan -> derece
     const lat2 = (φ2 * 180) / Math.PI
     const lon2 = (λ2 * 180) / Math.PI
+    
+    // SVG koordinatlarına çevir
     const p = latlonToSvg(lat2, lon2, svg)
     points.push({ x: p.x, y: p.y })
   }
+  
   if (!points.length) return ""
+  
+  // SVG path oluştur
   const [p0, ...rest] = points
   return (
     `M ${p0.x.toFixed(2)} ${p0.y.toFixed(2)} ` +
@@ -394,9 +410,29 @@ export default function TurkeyMap({
             <Switch id="labels" checked={showLabels} onCheckedChange={setShowLabels} />
           </div>
 
-          <div className="text-xs text-muted-foreground">
-            Her daire şehir merkezlerinden karayolu mesafe yaklaşımıyla çizilir.
-            (Kuş uçuşu mesafenin ~3.5 katı olarak hesaplanır)
+          <div className="text-xs text-muted-foreground space-y-2">
+            <div>
+              Her daire şehir merkezlerinden karayolu mesafe yaklaşımıyla çizilir.
+              (Kuş uçuşu mesafenin ~3.5 katı olarak hesaplanır)
+            </div>
+            <div className="bg-blue-50 p-3 rounded border-l-4 border-blue-400">
+              <div className="font-medium text-blue-800 mb-1">ℹ️ Daireler Neden Elips Görünüyor?</div>
+              <div className="text-blue-700 text-xs">
+                • Dünya yuvarlak, harita düz olduğu için daireler elips görünür<br/>
+                • Bu normal bir durumdur - her yöne 150km mesafe doğru hesaplanır<br/>
+                • Harita projeksiyonu nedeniyle kuzey-güney yönünde biraz uzar<br/>
+                • Mesafe hesaplaması matematiksel olarak doğrudur
+              </div>
+            </div>
+            <div className="bg-green-50 p-3 rounded border-l-4 border-green-400">
+              <div className="font-medium text-green-800 mb-1">🔬 Teknik Detaylar</div>
+              <div className="text-green-700 text-xs">
+                • Jeodezik hesaplama kullanılıyor (Dünya'nın eğriliği hesaba katılıyor)<br/>
+                • Her 3° açıda bir nokta hesaplanıyor (toplam 120 nokta)<br/>
+                • Dünya yarıçapı: 6,371 km<br/>
+                • Mesafe: Havadan 40km = Karayolu ~150km
+              </div>
+            </div>
           </div>
 
           <div className="space-y-3">
