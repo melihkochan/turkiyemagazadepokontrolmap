@@ -3,32 +3,43 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-console.log('Supabase config:', {
-  url: supabaseUrl,
-  hasKey: !!supabaseAnonKey,
-  env: process.env.NODE_ENV,
-  isProduction: process.env.NODE_ENV === 'production'
-})
+console.log('🔍 Supabase Environment Variables Check:')
+console.log('URL:', supabaseUrl)
+console.log('URL type:', typeof supabaseUrl)
+console.log('URL length:', supabaseUrl?.length)
+console.log('Key exists:', !!supabaseAnonKey)
+console.log('Key type:', typeof supabaseAnonKey)
+console.log('Key length:', supabaseAnonKey?.length)
+console.log('NODE_ENV:', process.env.NODE_ENV)
 
-// Environment variable'lar yoksa mock client oluştur
-export const supabase = supabaseUrl && supabaseAnonKey 
-  ? createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        autoRefreshToken: true,
-        persistSession: false,
-        detectSessionInUrl: false
-      },
-      db: {
-        schema: 'public'
-      }
-    })
-  : null
+// Fallback değerler (sadece test için)
+const fallbackUrl = 'https://bpbdniorqdfwogbrykoj.supabase.co'
+const fallbackKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJwYmRuaW9ycWRmd29nYnJ5a29qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5MDQ4NTEsImV4cCI6MjA3MDQ4MDg1MX0.R58OWWBLLoFu77Dq-qI90B8SXjooIBcEQttUru92yp4'
+
+// Environment variable'lar yoksa fallback değerleri kullan
+const finalUrl = supabaseUrl || fallbackUrl
+const finalKey = supabaseAnonKey || fallbackKey
+
+console.log('🔧 Final values:')
+console.log('Final URL:', finalUrl)
+console.log('Final Key exists:', !!finalKey)
+
+export const supabase = createClient(finalUrl, finalKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: false,
+    detectSessionInUrl: false
+  },
+  db: {
+    schema: 'public'
+  }
+})
 
 // Client oluşturuldu mu kontrol et
 if (supabase) {
   console.log('✅ Supabase client başarıyla oluşturuldu')
 } else {
-  console.warn('❌ Supabase client oluşturulamadı - environment variables eksik')
+  console.warn('❌ Supabase client oluşturulamadı')
 }
 
 // Şehir mağaza sayıları için tip tanımı
