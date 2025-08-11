@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils"
 import { referenceColors } from "@/data/reference-colors"
 import { depotCityIds as defaultDepots } from "@/data/depot-cities"
 import { depotCityCoords } from "@/data/depot-coordinates"
+import { getCityStoreCounts, updateCityStoreCount, updateMultipleCityStoreCounts } from "@/lib/supabase"
 import jsPDF from "jspdf"
 
 const RING_PALETTE = [
@@ -39,7 +40,6 @@ type CityPos = { id: string; name: string; cx: number; cy: number }
 type Props = {
   defaultSelectedCityIds?: string[]
   defaultRadiusKm?: number
-  storeCounts?: Record<string, number>
   mapHeightClass?: string
 }
 
@@ -116,7 +116,6 @@ function geodesicCirclePath(lat: number, lon: number, radiusKm: number, svg: SVG
 export default function TurkeyMap({
   defaultSelectedCityIds = defaultDepots,
   defaultRadiusKm = 150,
-  storeCounts = {},
   mapHeightClass = "min-h-[88vh]",
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -129,8 +128,9 @@ export default function TurkeyMap({
   const [radiusKm, setRadiusKm] = useState<number>(defaultRadiusKm)
   const [isFullscreen, setIsFullscreen] = useState(false)
 
-  const [counts, setCounts] = useState<Record<string, number>>(storeCounts)
+  const [counts, setCounts] = useState<Record<string, number>>({})
   const [searchEditor, setSearchEditor] = useState("")
+  const [dbLoading, setDbLoading] = useState(false)
 
   const getRingColor = (id: string) => {
     // Gaziantep ve Diyarbakır için kırmızı renk
@@ -212,6 +212,39 @@ export default function TurkeyMap({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Sayfa yüklendiğinde veritabanından veri çek
+  useEffect(() => {
+    loadFromDatabase()
+  }, [])
+
+  // Veritabanından veri çek
+  const loadFromDatabase = async () => {
+    setDbLoading(true)
+    try {
+      const dbCounts = await getCityStoreCounts()
+      setCounts(dbCounts)
+      console.log('Veritabanından veriler yüklendi:', dbCounts)
+    } catch (error) {
+      console.error('Veri yükleme hatası:', error)
+    } finally {
+      setDbLoading(false)
+    }
+  }
+
+
+
+  // Tek şehir güncelleme
+  const updateCityCount = async (cityId: string, newCount: number) => {
+    try {
+      const success = await updateCityStoreCount(cityId, newCount)
+      if (success) {
+        console.log(`${cityId} güncellendi: ${newCount}`)
+      }
+    } catch (error) {
+      console.error('Güncelleme hatası:', error)
+    }
+  }
 
   // Re-render labels on toggle/data change
   useEffect(() => {
@@ -358,8 +391,12 @@ export default function TurkeyMap({
     }
   }, [])
 
+
+
   const editorList = useMemo(() => {
+    // Sadece counts'tan gelen key'leri kullan, duplicate olmasın
     const keys = Object.keys(counts)
+    
     const q = searchEditor.trim().toLowerCase()
     const filtered = q.length ? keys.filter((k) => k.includes(q) || humanLabel(k).toLowerCase().includes(q)) : keys
     filtered.sort((a, b) => humanLabel(a).localeCompare(humanLabel(b), "tr"))
@@ -369,30 +406,41 @@ export default function TurkeyMap({
   return (
     <div className="flex flex-col gap-8">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Label htmlFor="header-radius" className="text-sm">Yarıçap:</Label>
-            <Input
-              id="header-radius"
-              type="number"
-              min={10}
-              max={600}
-              step={10}
-              value={radiusKm}
-              onChange={(e) => setRadiusKm(Number(e.target.value))}
-              className="w-20"
-            />
-            <span className="text-xs text-muted-foreground">km</span>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={toggleFullscreen}>
-              {isFullscreen ? "🗗 Çıkış" : "🔍 Tam Ekran"}
-            </Button>
-            <Button variant="outline" onClick={exportPDF}>
-              PDF (A3) indir
-            </Button>
-          </div>
-        </CardHeader>
+                 <CardHeader className="flex flex-row items-center justify-between gap-4 p-6 bg-gradient-to-r from-gray-50 to-blue-50 border-b border-gray-200">
+           <div className="flex items-center gap-4">
+             <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-lg border border-gray-200 shadow-sm">
+               <Label htmlFor="header-radius" className="text-sm font-medium text-gray-700">🎯 Kapsama Yarıçapı:</Label>
+               <Input
+                 id="header-radius"
+                 type="number"
+                 min={10}
+                 max={600}
+                 step={10}
+                 value={radiusKm}
+                 onChange={(e) => setRadiusKm(Number(e.target.value))}
+                 className="w-20 text-center font-medium border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+               />
+               <span className="text-sm font-medium text-gray-600">km</span>
+             </div>
+           </div>
+           <div className="flex gap-3">
+             <Button 
+               variant="outline" 
+               size="sm" 
+               onClick={toggleFullscreen}
+               className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 hover:text-gray-800"
+             >
+               {isFullscreen ? "🗗 Tam Ekrandan Çık" : "🔍 Tam Ekran"}
+             </Button>
+             <Button 
+               variant="outline" 
+               onClick={exportPDF}
+               className="bg-white border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
+             >
+               📄 PDF (A3) İndir
+             </Button>
+           </div>
+         </CardHeader>
         <CardContent>
           <div className={cn("relative w-full", mapHeightClass)}>
             <div ref={containerRef} className={cn("absolute inset-0 w-full")} />
@@ -405,94 +453,175 @@ export default function TurkeyMap({
 
       <Card>
         <CardContent className="space-y-6 pt-6">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="labels">Şehir İsimlerini Göster</Label>
-            <Switch id="labels" checked={showLabels} onCheckedChange={setShowLabels} />
-          </div>
+                     <div className="flex items-center justify-between bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+             <div className="flex items-center gap-3">
+               <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                 <span className="text-blue-600 text-lg">🏷️</span>
+               </div>
+               <div>
+                 <Label htmlFor="labels" className="text-base font-medium text-gray-800">Şehir İsimlerini Göster</Label>
+                 <p className="text-sm text-gray-500">Haritada şehir isimlerini ve mağaza sayılarını göster/gizle</p>
+               </div>
+             </div>
+             <Switch id="labels" checked={showLabels} onCheckedChange={setShowLabels} />
+           </div>
 
-          <div className="text-xs text-muted-foreground space-y-2">
-            <div>
-              Her daire şehir merkezlerinden karayolu mesafe yaklaşımıyla çizilir.
-              (Kuş uçuşu mesafenin ~3.5 katı olarak hesaplanır)
-            </div>
-            <div className="bg-blue-50 p-3 rounded border-l-4 border-blue-400">
-              <div className="font-medium text-blue-800 mb-1">ℹ️ Daireler Neden Elips Görünüyor?</div>
-              <div className="text-blue-700 text-xs">
-                • Dünya yuvarlak, harita düz olduğu için daireler elips görünür<br/>
-                • Bu normal bir durumdur - her yöne 150km mesafe doğru hesaplanır<br/>
-                • Harita projeksiyonu nedeniyle kuzey-güney yönünde biraz uzar<br/>
-                • Mesafe hesaplaması matematiksel olarak doğrudur
-              </div>
-            </div>
-            <div className="bg-green-50 p-3 rounded border-l-4 border-green-400">
-              <div className="font-medium text-green-800 mb-1">🔬 Teknik Detaylar</div>
-              <div className="text-green-700 text-xs">
-                • Jeodezik hesaplama kullanılıyor (Dünya'nın eğriliği hesaba katılıyor)<br/>
-                • Her 3° açıda bir nokta hesaplanıyor (toplam 120 nokta)<br/>
-                • Dünya yarıçapı: 6,371 km<br/>
-                • Mesafe: Havadan 40km = Karayolu ~150km
-              </div>
-            </div>
-          </div>
+                     <div className="space-y-4">
+             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200">
+               <div className="flex items-start gap-3">
+                 <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                   <span className="text-blue-600 text-sm">📏</span>
+                 </div>
+                 <div>
+                   <p className="text-sm text-blue-800 font-medium mb-1">
+                     Her daire şehir merkezlerinden karayolu mesafe yaklaşımıyla çizilir.
+                   </p>
+                   <p className="text-xs text-blue-700">
+                     (Kuş uçuşu mesafenin ~3.5 katı olarak hesaplanır)
+                   </p>
+                 </div>
+               </div>
+             </div>
+             
+             <div className="grid gap-4 md:grid-cols-2">
+               <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-300 shadow-sm">
+                 <div className="flex items-start gap-3">
+                   <div className="w-8 h-8 bg-blue-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                     <span className="text-blue-700 text-sm">ℹ️</span>
+                   </div>
+                   <div>
+                     <h4 className="font-medium text-blue-800 mb-2">Daireler Neden Elips Görünüyor?</h4>
+                     <ul className="text-xs text-blue-700 space-y-1">
+                       <li>• Dünya yuvarlak, harita düz olduğu için daireler elips görünür</li>
+                       <li>• Bu normal bir durumdur - her yöne 150km mesafe doğru hesaplanır</li>
+                       <li>• Harita projeksiyonu nedeniyle kuzey-güney yönünde biraz uzar</li>
+                       <li>• Mesafe hesaplaması matematiksel olarak doğrudur</li>
+                     </ul>
+                   </div>
+                 </div>
+               </div>
+               
+               <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg border border-green-300 shadow-sm">
+                 <div className="flex items-start gap-3">
+                   <div className="w-8 h-8 bg-green-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                     <span className="text-green-700 text-sm">🔬</span>
+                   </div>
+                   <div>
+                     <h4 className="font-medium text-green-800 mb-2">Teknik Detaylar</h4>
+                     <ul className="text-xs text-green-700 space-y-1">
+                       <li>• Jeodezik hesaplama kullanılıyor (Dünya'nın eğriliği hesaba katılıyor)</li>
+                       <li>• Her 3° açıda bir nokta hesaplanıyor (toplam 120 nokta)</li>
+                       <li>• Dünya yarıçapı: 6,371 km</li>
+                       <li>• Mesafe: Havadan 40km = Karayolu ~150km</li>
+                     </ul>
+                   </div>
+                 </div>
+               </div>
+             </div>
+           </div>
 
-          <div className="space-y-3">
-            <Label>Depo Konumları</Label>
-            <div className="flex flex-wrap gap-2">
-              {selectedCityIds.map((id) => {
-                const coord = depotCityCoords[id]
-                return (
-                  <Badge key={id} variant="secondary" className="text-xs">
-                    {humanLabel(id)} {coord && `(${coord.lat.toFixed(3)}, ${coord.lon.toFixed(3)})`}
-                  </Badge>
-                )
-              })}
-            </div>
-          </div>
+                     <div className="space-y-4">
+             <div className="flex items-center justify-between">
+               <Label className="text-lg font-semibold text-gray-800">📍 Depo Konumları</Label>
+               <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                 {selectedCityIds.length} Depo
+               </Badge>
+             </div>
+             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+               {selectedCityIds.map((id) => {
+                 const coord = depotCityCoords[id]
+                 return (
+                   <div key={id} className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-3 border border-gray-200 hover:border-blue-300 transition-all duration-200 hover:shadow-md">
+                     <div className="flex items-center justify-between mb-2">
+                       <span className="text-sm font-medium text-gray-800">{humanLabel(id)}</span>
+                       <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                     </div>
+                     {coord && (
+                       <div className="text-xs text-gray-600 font-mono bg-white px-2 py-1 rounded border">
+                         {coord.lat.toFixed(3)}, {coord.lon.toFixed(3)}
+                       </div>
+                     )}
+                   </div>
+                 )
+               })}
+             </div>
+           </div>
 
-          <div className="space-y-4">
-            <Label>Mağaza Sayıları</Label>
-            <div className="flex flex-wrap items-center gap-2">
-              <Input
-                placeholder="Şehir ara (ör: Ankara, İstanbul - AVR)"
-                value={searchEditor}
-                onChange={(e) => setSearchEditor(e.target.value)}
-                className="max-w-xs"
-              />
-              <Button variant="outline" onClick={() => setCounts(storeCounts || {})}>
-                Varsayılanları Yükle
-              </Button>
-              <Button
-                onClick={() => {
-                  const svg = svgRef.current
-                  if (!svg) return
-                  const labelsLayer = svg.querySelector("#labels-layer") as SVGGElement | null
-                  if (!labelsLayer) return
-                  labelsLayer.innerHTML = ""
-                  if (showLabels) {
-                    renderLabels(labelsLayer, cities, counts, svg, new Set(selectedCityIds))
-                  }
-                }}
-              >
-                Haritada Güncelle
-              </Button>
-            </div>
+                     <div className="space-y-4">
+             <div className="flex items-center justify-between">
+               <Label className="text-lg font-semibold text-gray-800">🏪 Mağaza Sayıları</Label>
+               <div className="flex items-center gap-3">
+                 <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                   {Object.keys(counts).length} Şehir
+                 </Badge>
+                 <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                   🏪 {Object.values(counts).reduce((sum, count) => sum + (count || 0), 0)} Toplam Mağaza
+                 </Badge>
+               </div>
+             </div>
+             
+             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
+               <div className="flex flex-wrap items-center gap-3">
+                 <div className="relative flex-1 max-w-md">
+                   <Input
+                     placeholder="🔍 Şehir ara (ör: Ankara, İstanbul - AVR)"
+                     value={searchEditor}
+                     onChange={(e) => setSearchEditor(e.target.value)}
+                     className="pl-10 bg-white border-blue-300 focus:border-blue-500 focus:ring-blue-500"
+                   />
+                   <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                     🔍
+                   </div>
+                 </div>
+                 
+                 <Button 
+                   variant="outline" 
+                   onClick={loadFromDatabase}
+                   disabled={dbLoading}
+                   className="bg-white border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
+                 >
+                   {dbLoading ? "⏳ Yükleniyor..." : "🗄️ Veritabanından Yükle"}
+                 </Button>
+                 
+                 <Button 
+                   variant="outline" 
+                   onClick={() => setCounts({})}
+                   className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400"
+                 >
+                   🗑️ Temizle
+                 </Button>
+               </div>
+             </div>
 
-            <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-              {editorList.map((id) => (
-                <div key={id} className="flex items-center justify-between gap-2 rounded border p-2">
-                  <span className="text-sm">{humanLabel(id)}</span>
-                  <Input
-                    type="number"
-                    value={Number.isFinite(counts[id]) ? counts[id] : 0}
-                    onChange={(e) => {
-                      const v = Number(e.target.value)
-                      setCounts((prev) => ({ ...prev, [id]: Number.isFinite(v) ? v : 0 }))
-                    }}
-                    className="w-20"
-                  />
-                </div>
-              ))}
-            </div>
+                         <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+               {editorList.map((id) => (
+                 <div key={id} className="bg-white rounded-lg p-4 border border-gray-200 hover:border-blue-300 transition-all duration-200 hover:shadow-md group">
+                   <div className="flex items-center justify-between mb-3">
+                     <span className="text-sm font-medium text-gray-800">{humanLabel(id)}</span>
+                     <div className="w-2 h-2 bg-green-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
+                   </div>
+                   <div className="flex items-center gap-2">
+                     <Input
+                       type="number"
+                       value={Number.isFinite(counts[id]) ? counts[id] : 0}
+                       onChange={(e) => {
+                         const v = Number(e.target.value)
+                         const newCounts = { ...counts, [id]: Number.isFinite(v) ? v : 0 }
+                         setCounts(newCounts)
+                         
+                         // Otomatik olarak veritabanına kaydet
+                         if (Number.isFinite(v)) {
+                           updateCityCount(id, v)
+                         }
+                       }}
+                       className="w-20 text-center font-medium border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                       min="0"
+                     />
+                     <span className="text-xs text-gray-500 font-medium">mağaza</span>
+                   </div>
+                 </div>
+               ))}
+             </div>
           </div>
         </CardContent>
       </Card>
@@ -679,40 +808,51 @@ function renderLabels(
   })
 
   // AVR/AND yazıları (sadece bilgilendirme — ring merkezleri yukarıda ayarlandı)
-  const avrCount = counts["istanbul-avr"]
-  const andCount = counts["istanbul-and"]
+  const avrCount = counts["İstanbul - AVR"]
+  const andCount = counts["İstanbul - AND"]
   if (svg) {
-    const avrCenter = getDepotDotPosition("istanbul-avr", cities, svg)
-    const andCenter = getDepotDotPosition("istanbul-and", cities, svg)
-    if (avrCenter && typeof avrCount === "number") {
-      const t = document.createElementNS(ns, "text")
-      t.setAttribute("x", String(avrCenter.cx))
-      t.setAttribute("y", String(avrCenter.cy - 14))
-      t.setAttribute("text-anchor", "middle")
-      t.setAttribute("dominant-baseline", "central")
-      t.setAttribute("font-size", "9")
-      t.setAttribute("font-weight", "600")
-      t.setAttribute("fill", "#000000")
-      t.setAttribute("paint-order", "stroke")
-      t.setAttribute("stroke", "rgba(255,255,255,0.8)")
-      t.setAttribute("stroke-width", "2")
-      t.textContent = `İST - AVR ${avrCount}`
-      layer.appendChild(t)
-    }
-    if (andCenter && typeof andCount === "number") {
-      const t = document.createElementNS(ns, "text")
-      t.setAttribute("x", String(andCenter.cx))
-      t.setAttribute("y", String(andCenter.cy - 14))
-      t.setAttribute("text-anchor", "middle")
-      t.setAttribute("dominant-baseline", "central")
-      t.setAttribute("font-size", "9")
-      t.setAttribute("font-weight", "600")
-      t.setAttribute("fill", "#000000")
-      t.setAttribute("paint-order", "stroke")
-      t.setAttribute("stroke", "rgba(255,255,255,0.8)")
-      t.setAttribute("stroke-width", "2")
-      t.textContent = `İST - AND ${andCount}`
-      layer.appendChild(t)
+    // İstanbul SVG elementini bul
+    const istanbulElement = svg.querySelector("#istanbul") as SVGGElement | null
+    if (istanbulElement) {
+      const b = istanbulElement.getBBox()
+      
+      // AVR etiketi
+      if (typeof avrCount === "number") {
+        const avrX = b.x + b.width * 0.15
+        const avrY = b.y + b.height * 0.45
+        const t = document.createElementNS(ns, "text")
+        t.setAttribute("x", String(avrX))
+        t.setAttribute("y", String(avrY - 14))
+        t.setAttribute("text-anchor", "middle")
+        t.setAttribute("dominant-baseline", "central")
+        t.setAttribute("font-size", "9")
+        t.setAttribute("font-weight", "600")
+        t.setAttribute("fill", "#000000")
+        t.setAttribute("paint-order", "stroke")
+        t.setAttribute("stroke", "rgba(255,255,255,0.8)")
+        t.setAttribute("stroke-width", "2")
+        t.textContent = `İST - AVR ${avrCount}`
+        layer.appendChild(t)
+      }
+      
+      // AND etiketi
+      if (typeof andCount === "number") {
+        const andX = b.x + b.width * 0.73
+        const andY = b.y + b.height * 0.85
+        const t = document.createElementNS(ns, "text")
+        t.setAttribute("x", String(andX))
+        t.setAttribute("y", String(andY - 14))
+        t.setAttribute("text-anchor", "middle")
+        t.setAttribute("dominant-baseline", "central")
+        t.setAttribute("font-size", "9")
+        t.setAttribute("font-weight", "600")
+        t.setAttribute("fill", "#000000")
+        t.setAttribute("paint-order", "stroke")
+        t.setAttribute("stroke", "rgba(255,255,255,0.8)")
+        t.setAttribute("stroke-width", "2")
+        t.textContent = `İST - AND ${andCount}`
+        layer.appendChild(t)
+      }
     }
   }
 }
