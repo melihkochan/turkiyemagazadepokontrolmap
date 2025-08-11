@@ -104,9 +104,9 @@ export const referenceColors: Record<string, string> = {
   antalya: "#d79775", // Somon/kahverengi turuncu
   isparta: LILAC,
   
-  // Afyonkarahisar Eskişehir ile aynı renk, Isparta farklı açık somon rengi
+  // Afyonkarahisar Eskişehir ile aynı renk, Isparta Burdur ile aynı renk
   afyonkarahisar: GREY,
-  isparta: "#f6c6ad", // Açık somon/bej tonu
+  isparta: "#d79775", // Somon/kahverengi turuncu (Burdur ile aynı)
 
   // Kalan Doğu/İç bölgeler için önceki genel atamalar (örnekleri koruyoruz)
   kayseri: GREY,
