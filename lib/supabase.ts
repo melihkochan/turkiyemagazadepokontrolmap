@@ -75,8 +75,8 @@ export async function getCityStoreCounts(): Promise<Record<string, number>> {
     // Record<string, number> formatına çevir
     const counts: Record<string, number> = {}
     data?.forEach(row => {
-      // city_id'yi key olarak kullan, city_name'i log'da göster
-      counts[row.city_id] = row.store_count
+      // city_name'i key olarak kullan (city cards'da cityName kullanılıyor)
+      counts[row.city_name] = row.store_count
       console.log(`Şehir: ${row.city_name || row.city_id}, ID: ${row.city_id}, Mağaza sayısı: ${row.store_count}`)
     })
     
@@ -91,7 +91,7 @@ export async function getCityStoreCounts(): Promise<Record<string, number>> {
 
 // Şehir mağaza sayısını güncelle
 export async function updateCityStoreCount(
-  cityId: string, 
+  cityName: string, 
   storeCount: number
 ): Promise<boolean> {
   try {
@@ -103,7 +103,7 @@ export async function updateCityStoreCount(
     const { error } = await supabase
       .from('city_store_counts')
       .update({ store_count: storeCount })
-      .eq('city_id', cityId)
+      .eq('city_name', cityName)
     
     if (error) {
       console.error('Güncelleme hatası:', error)
@@ -139,8 +139,8 @@ export async function updateMultipleCityStoreCounts(
       return true
     }
     
-    const updatesArray = validUpdates.map(([cityId, count]) => ({
-      city_id: cityId,
+    const updatesArray = validUpdates.map(([cityName, count]) => ({
+      city_name: cityName,
       store_count: count
     }))
     
@@ -148,7 +148,7 @@ export async function updateMultipleCityStoreCounts(
     
     const { error } = await supabase
       .from('city_store_counts')
-      .upsert(updatesArray, { onConflict: 'city_id' })
+      .upsert(updatesArray, { onConflict: 'city_name' })
     
     if (error) {
       console.error('Toplu güncelleme hatası:', error)
@@ -408,14 +408,17 @@ export async function initializeCityColorsTable(): Promise<boolean> {
     console.log('Varsayılan şehir renkleri ekleniyor...')
     
     const { referenceColors } = await import('@/data/reference-colors')
-    const { depotCityIds } = await import('@/data/depot-cities')
     
-    // Sadece depot-cities'deki şehirler için renk ekle
-    const defaultColors = depotCityIds.map(cityId => {
-      const color = referenceColors[cityId.toLowerCase()] || '#d1d5db' // Varsayılan gri
+    // Tüm Türkiye şehirleri için renk ekle
+    const allTurkishCities = [
+      "Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Aksaray", "Amasya", "Ankara", "Antalya", "Ardahan", "Artvin", "Aydın", "Balıkesir", "Bartın", "Batman", "Bayburt", "Bilecik", "Bingöl", "Bitlis", "Bolu", "Burdur", "Bursa", "Çanakkale", "Çankırı", "Çorum", "Denizli", "Diyarbakır", "Düzce", "Edirne", "Elazığ", "Erzincan", "Erzurum", "Eskişehir", "Gaziantep", "Giresun", "Gümüşhane", "Hakkari", "Hatay", "Iğdır", "Isparta", "İstanbul", "İzmir", "Kahramanmaraş", "Karabük", "Karaman", "Kars", "Kastamonu", "Kayseri", "Kırıkkale", "Kırklareli", "Kırşehir", "Kilis", "Kocaeli", "Konya", "Kütahya", "Malatya", "Manisa", "Mardin", "Mersin", "Muğla", "Muş", "Nevşehir", "Niğde", "Ordu", "Osmaniye", "Rize", "Sakarya", "Samsun", "Şanlıurfa", "Siirt", "Sinop", "Sivas", "Şırnak", "Tekirdağ", "Tokat", "Trabzon", "Tunceli", "Uşak", "Van", "Yalova", "Yozgat", "Zonguldak"
+    ]
+    
+    const defaultColors = allTurkishCities.map(cityName => {
+      const color = referenceColors[cityName.toLowerCase()] || '#d1d5db' // Varsayılan gri
       return {
-        city_id: cityId,
-        city_name: cityId, // city_id ile aynı (çünkü depot-cities'de zaten şehir adları var)
+        city_id: cityName.toLowerCase(),
+        city_name: cityName,
         color: color
       }
     })
@@ -431,7 +434,7 @@ export async function initializeCityColorsTable(): Promise<boolean> {
       return false
     }
     
-    console.log('Varsayılan şehir renkleri başarıyla eklendi')
+    console.log('Tüm Türkiye şehirleri için varsayılan renkler başarıyla eklendi')
     return true
   } catch (error) {
     console.error('Şehir renkleri tablosu başlatma hatası:', error)
@@ -496,6 +499,35 @@ export async function initializeStoreCountsTable(): Promise<boolean> {
     } else if (existingData && existingData.length > 0) {
       console.log('city_store_counts tablosu zaten mevcut ve veri içeriyor')
       return true
+    }
+    
+    // Tablo boşsa, tüm Türkiye şehirleri için varsayılan mağaza sayıları ekle
+    if (!existingData || existingData.length === 0) {
+      console.log('Tablo boş, tüm Türkiye şehirleri için varsayılan mağaza sayıları ekleniyor...')
+      
+      // Tüm Türkiye şehirleri (city cards'da kullanılan liste)
+      const allTurkishCities = [
+        "Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Aksaray", "Amasya", "Ankara", "Antalya", "Ardahan", "Artvin", "Aydın", "Balıkesir", "Bartın", "Batman", "Bayburt", "Bilecik", "Bingöl", "Bitlis", "Bolu", "Burdur", "Bursa", "Çanakkale", "Çankırı", "Çorum", "Denizli", "Diyarbakır", "Düzce", "Edirne", "Elazığ", "Erzincan", "Erzurum", "Eskişehir", "Gaziantep", "Giresun", "Gümüşhane", "Hakkari", "Hatay", "Iğdır", "Isparta", "İstanbul", "İzmir", "Kahramanmaraş", "Karabük", "Karaman", "Kars", "Kastamonu", "Kayseri", "Kırıkkale", "Kırklareli", "Kırşehir", "Kilis", "Kocaeli", "Konya", "Kütahya", "Malatya", "Manisa", "Mardin", "Mersin", "Muğla", "Muş", "Nevşehir", "Niğde", "Ordu", "Osmaniye", "Rize", "Sakarya", "Samsun", "Şanlıurfa", "Siirt", "Sinop", "Sivas", "Şırnak", "Tekirdağ", "Tokat", "Trabzon", "Tunceli", "Uşak", "Van", "Yalova", "Yozgat", "Zonguldak"
+      ]
+      
+      const defaultStoreCounts = allTurkishCities.map(cityName => ({
+        city_id: cityName.toLowerCase(),
+        city_name: cityName,
+        store_count: 0 // Varsayılan olarak 0 mağaza
+      }))
+      
+      console.log('Eklenecek varsayılan mağaza sayıları:', defaultStoreCounts)
+      
+      const { error: insertError } = await supabase
+        .from('city_store_counts')
+        .insert(defaultStoreCounts)
+      
+      if (insertError) {
+        console.error('Varsayılan mağaza sayıları ekleme hatası:', insertError)
+        return false
+      }
+      
+      console.log('Tüm Türkiye şehirleri için varsayılan mağaza sayıları başarıyla eklendi')
     }
     
     console.log('Şehir mağaza sayıları tablosu hazır')

@@ -123,6 +123,7 @@ export default function TurkeyMap({
   const [radiusKm, setRadiusKm] = useState(defaultRadiusKm)
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [cityColors, setCityColors] = useState<Record<string, string>>({})
+  const [defaultColors, setDefaultColors] = useState<Record<string, string>>({})
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [dbLoading, setDbLoading] = useState(false)
   const [colorLoading, setColorLoading] = useState(false)
@@ -195,24 +196,16 @@ export default function TurkeyMap({
           return { id, name, cx, cy }
         })
 
-        paintAllDefault(svg)
-        
-        // Renkleri uygula - önce veritabanından gelen renkleri kontrol et
-        if (Object.keys(cityColors).length > 0) {
-          // Veritabanından gelen renkleri sadece şehir haritalarına uygula
-          Object.entries(cityColors).forEach(([cityName, color]) => {
-            setGroupColor(svg, cityName, color)
-          })
-        } else {
-          // Varsayılan renkleri sadece şehir haritalarına uygula
-        applyReferenceColors(svg, referenceColors)
-        }
+        console.log('🔍 SVG\'de tespit edilen şehirler:', detected)
+        setCities(detected)
+
+        // paintAllDefault'i kaldırdık - renkler useEffect ile uygulanacak
+        // paintAllDefault(svg)
 
         if (showLabels) {
           renderLabels(labelsLayer, detected, counts, svg, new Set(selectedCityIds))
         }
 
-        setCities(detected)
       } catch (e) {
         console.error(e)
       } finally {
@@ -228,9 +221,12 @@ export default function TurkeyMap({
 
   // Component mount olduğunda verileri otomatik yükle
   useEffect(() => {
-    // Component mount olduğunda verileri yükle
-    loadFromDatabase()
-    loadColorsFromDatabase()
+    // Önce veritabanından renkleri yükle, sonra SVG'yi yükle
+    const loadData = async () => {
+      await loadColorsFromDatabase()
+      await loadFromDatabase()
+    }
+    loadData()
     
     // Environment variables kontrolü
     console.log('🔍 Environment Variables Check:')
@@ -238,25 +234,41 @@ export default function TurkeyMap({
     console.log('NEXT_PUBLIC_SUPABASE_ANON_KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? '✅ Set' : '❌ Not Set')
   }, [])
 
-  // cityColors değiştiğinde SVG'yi güncelle
+  // SVG yüklendiğinde renkleri uygula
   useEffect(() => {
-    if (svgRef.current) {
-      console.log('cityColors değişti, SVG güncelleniyor:', cityColors)
+    if (svgRef.current && (Object.keys(cityColors).length > 0 || Object.keys(defaultColors).length > 0)) {
+      console.log('SVG yüklendi, renkler uygulanıyor:', { cityColors, defaultColors })
       
       if (Object.keys(cityColors).length > 0) {
         // Veritabanından gelen renkleri şehir haritalarına uygula
         Object.entries(cityColors).forEach(([cityName, color]) => {
           console.log(`${cityName} şehri için renk uygulanıyor: ${color}`)
+          // Şehir adını kullanarak SVG'deki grubu bul ve renk uygula
           setGroupColor(svgRef.current!, cityName, color)
         })
-      } else {
-        // cityColors boşsa varsayılan renkleri uygula
-        console.log('cityColors boş, varsayılan renkler uygulanıyor')
-        const { referenceColors } = require('@/data/reference-colors')
-        applyReferenceColors(svgRef.current!, referenceColors)
+      } else if (Object.keys(defaultColors).length > 0) {
+        // Veritabanından gelen default renkleri kullan
+        Object.entries(defaultColors).forEach(([cityName, color]) => {
+          console.log(`${cityName} şehri için default renk uygulanıyor: ${color}`)
+          // Şehir adını kullanarak SVG'deki grubu bul ve renk uygula
+          setGroupColor(svgRef.current!, cityName, color)
+        })
       }
+    } else if (svgRef.current && Object.keys(cityColors).length === 0 && Object.keys(defaultColors).length === 0) {
+      // Hiç renk yüklenmemişse, reference colors'ı uygula
+      console.log('Veritabanından renk yüklenmedi, reference colors uygulanıyor')
+      console.log('🔍 Reference colors:', referenceColors)
+      applyReferenceColors(svgRef.current, referenceColors)
     }
-  }, [cityColors])
+  }, [cityColors, defaultColors, svgRef.current])
+
+  // SVG yüklendiğinde ve hiç renk yoksa reference colors'ı uygula
+  useEffect(() => {
+    if (svgRef.current && !loading && Object.keys(cityColors).length === 0 && Object.keys(defaultColors).length === 0) {
+      console.log('SVG yüklendi ama renk yok, reference colors uygulanıyor')
+      applyReferenceColors(svgRef.current, referenceColors)
+    }
+  }, [loading, cityColors, defaultColors, svgRef.current])
 
   // Veritabanından veri çek
   const loadFromDatabase = async () => {
@@ -270,6 +282,8 @@ export default function TurkeyMap({
       const dbCounts = await getDynamicStoreCounts()
       setCounts(dbCounts)
       console.log('Veritabanından veriler yüklendi:', dbCounts)
+      console.log('🔍 Veritabanından gelen mağaza sayısı:', Object.keys(dbCounts).length)
+      console.log('🔍 Örnek veriler:', Object.entries(dbCounts).slice(0, 5))
     } catch (error) {
       console.error('Veri yükleme hatası:', error)
     } finally {
@@ -282,7 +296,9 @@ export default function TurkeyMap({
     try {
       const dbColors = await getCityColors()
       setCityColors(dbColors)
+      setDefaultColors(dbColors) // Veritabanından gelen renkleri default olarak da sakla
       console.log('Veritabanından şehir renkleri yüklendi:', dbColors)
+      console.log('🔍 Veritabanından gelen renk sayısı:', Object.keys(dbColors).length)
     } catch (error) {
       console.error('Veritabanından renk yükleme hatası:', error)
     } finally {
@@ -364,6 +380,7 @@ export default function TurkeyMap({
       const success = await clearAllCityColors()
       if (success) {
         setCityColors({})
+        setDefaultColors({}) // defaultColors state'ini de temizle
         console.log('Tüm şehir renkleri sıfırlandı')
         
         // SVG'de varsayılan renkleri uygula
@@ -660,126 +677,8 @@ export default function TurkeyMap({
                       "Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Aksaray", "Amasya", "Ankara", "Antalya", "Ardahan", "Artvin", "Aydın", "Balıkesir", "Bartın", "Batman", "Bayburt", "Bilecik", "Bingöl", "Bitlis", "Bolu", "Burdur", "Bursa", "Çanakkale", "Çankırı", "Çorum", "Denizli", "Diyarbakır", "Düzce", "Edirne", "Elazığ", "Erzincan", "Erzurum", "Eskişehir", "Gaziantep", "Giresun", "Gümüşhane", "Hakkari", "Hatay", "Iğdır", "Isparta", "İstanbul", "İzmir", "Kahramanmaraş", "Karabük", "Karaman", "Kars", "Kastamonu", "Kayseri", "Kırıkkale", "Kırklareli", "Kırşehir", "Kilis", "Kocaeli", "Konya", "Kütahya", "Malatya", "Manisa", "Mardin", "Mersin", "Muğla", "Muş", "Nevşehir", "Niğde", "Ordu", "Osmaniye", "Rize", "Sakarya", "Samsun", "Şanlıurfa", "Siirt", "Sinop", "Sivas", "Şırnak", "Tekirdağ", "Tokat", "Trabzon", "Tunceli", "Uşak", "Van", "Yalova", "Yozgat", "Zonguldak"
                     ].map((cityName) => {
                       const defaultColor = (() => {
-                        // reference-colors.ts dosyasından doğru default renkleri al
-                        const refColors: Record<string, string> = {
-                          // Marmara turuncu
-                          "istanbul": "#f59e0b",
-                          "edirne": "#f59e0b",
-                          "tekirdag": "#f59e0b",
-                          "kocaeli": "#f59e0b",
-                          "sakarya": "#f59e0b",
-                          
-                          // Kuzey Ege açık yeşil
-                          "canakkale": "#86efac",
-                          "balikesir": "#86efac",
-                          "bursa": "#86efac",
-                          "yalova": "#86efac",
-                          
-                          // Ege mavi tonları
-                          "izmir": "#93c5fd",
-                          "manisa": "#93c5fd",
-                          "usak": "#93c5fd",
-                          "aydin": "#1e40af",
-                          "denizli": "#1e40af",
-                          "mugla": "#1e40af",
-                          
-                          // Doğu Marmara / İç Ege nötr
-                          "bilecik": "#d1d5db",
-                          "kutahya": "#d1d5db",
-                          "eskisehir": "#d1d5db",
-                          "bolu": "#d1d5db",
-                          "duzce": "#d1d5db",
-                          
-                          // Akdeniz turuncu
-                          "mersin": "#fbbf24",
-                          "adana": "#fbbf24",
-                          "osmaniye": "#fbbf24",
-                          "hatay": "#fbbf24",
-                          
-                          // İç Anadolu sarı
-                          "ankara": "#fde047",
-                          "kirikkale": "#fde047",
-                          "cankiri": "#fde047",
-                          "kastamonu": "#fde047",
-                          
-                          // Orta-Karadeniz kuşağı
-                          "sinop": "#fdba74",
-                          "samsun": "#fdba74",
-                          "corum": "#fdba74",
-                          "amasya": "#fdba74",
-                          "tokat": "#fdba74",
-                          "ordu": "#fdba74",
-                          
-                          // Doğu Karadeniz kuşağı
-                          "giresun": "#c084fc",
-                          "trabzon": "#c084fc",
-                          "gumushane": "#c084fc",
-                          "bayburt": "#c084fc",
-                          "rize": "#c084fc",
-                          "artvin": "#c084fc",
-                          
-                          // Doğu üçlüsü
-                          "bitlis": "#fda4af",
-                          "van": "#fda4af",
-                          "hakkari": "#fda4af",
-                          
-                          // Güneydoğu beşlisi
-                          "kahramanmaras": "#22c55e",
-                          "adiyaman": "#22c55e",
-                          "gaziantep": "#22c55e",
-                          "sanliurfa": "#22c55e",
-                          "kilis": "#22c55e",
-                          
-                          // Konya & Karaman
-                          "konya": "#fda4af",
-                          "karaman": "#fda4af",
-                          
-                          // Antalya & Burdur
-                          "antalya": "#d79775",
-                          "burdur": "#d79775",
-                          "isparta": "#d79775",
-                          
-                          // Afyonkarahisar
-                          "afyonkarahisar": "#d1d5db",
-                          
-                          // Kalan Doğu/İç bölgeler
-                          "kayseri": "#d1d5db",
-                          "nevsehir": "#d1d5db",
-                          "nigde": "#d1d5db",
-                          "yozgat": "#d1d5db",
-                          "sivas": "#d1d5db",
-                          "kirsehir": "#d1d5db",
-                          "aksaray": "#d1d5db",
-                          
-                          // Kuzeydoğu
-                          "erzurum": "#fde047",
-                          "erzincan": "#fde047",
-                          "kars": "#fde047",
-                          "ardahan": "#fde047",
-                          "igdir": "#fde047",
-                          "agri": "#fde047",
-                          
-                          // Güneydoğu mor kütle
-                          "mardin": "#c084fc",
-                          "batman": "#c084fc",
-                          "siirt": "#c084fc",
-                          "sirnak": "#c084fc",
-                          "diyarbakir": "#c084fc",
-                          "malatya": "#c084fc",
-                          "tunceli": "#c084fc",
-                          "elazig": "#c084fc",
-                          "bingol": "#c084fc",
-                          "mus": "#c084fc",
-                          
-                          // Karadeniz batı
-                          "zonguldak": "#d1d5db",
-                          "karabuk": "#d1d5db",
-                          "bartin": "#d1d5db",
-                          
-                          // Kırklareli
-                          "kirklareli": "#f59e0b"
-                        }
-                        return refColors[cityName.toLowerCase()] || '#d1d5db'
+                        // Veritabanından gelen default renkleri kullan
+                        return defaultColors[cityName.toLowerCase()] || cityColors[cityName.toLowerCase()] || referenceColors[cityName.toLowerCase()] || '#d1d5db'
                       })()
                       
                       return (
@@ -799,62 +698,13 @@ export default function TurkeyMap({
                       <div 
                         className="w-12 h-12 rounded-xl border-2 border-gray-300 shadow-lg" 
                         style={{ 
-                          backgroundColor: cityColors[selectedCityForColor] || (() => {
-                            const refColors: Record<string, string> = {
-                              "İstanbul": "#f59e0b",
-                              "ankara": "#fde047",
-                              "antalya": "#d79775",
-                              "bursa": "#86efac",
-                              "diyarbakir": "#c084fc",
-                              "duzce": "#d1d5db",
-                              "erzurum": "#fde047",
-                              "eskisehir": "#d1d5db",
-                              "gaziantep": "#22c55e",
-                              "izmir": "#93c5fd",
-                              "kayseri": "#d1d5db",
-                              "konya": "#fda4af",
-                              "muğla": "#1e40af",
-                              "samsun": "#fdba74",
-                              "trabzon": "#c084fc",
-                              "adana": "#fbbf24"
-                            }
-                            return refColors[selectedCityForColor.toLowerCase()] || '#d1d5db'
-                          })()
+                          backgroundColor: cityColors[selectedCityForColor] || defaultColors[selectedCityForColor.toLowerCase()] || referenceColors[selectedCityForColor.toLowerCase()] || '#d1d5db'
                         }}
                       />
                       <div className="flex-1">
                         <div className="text-sm font-bold text-gray-800 mb-1">{selectedCityForColor}</div>
                         <code className="text-xs font-mono text-gray-600 bg-white px-2 py-1 rounded border">
-                          {cityColors[selectedCityForColor] || 'Veritabanında kayıtlı değil'}
-                        </code>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Default renk bilgisi */}
-                {selectedCityForColor && (
-                  <div className="p-4 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl border border-yellow-200">
-                    <Label className="text-sm font-semibold text-yellow-800 mb-3 block">Default Renk</Label>
-                    <div className="flex items-center gap-4">
-                      <div 
-                        className="w-12 h-12 rounded-xl border-2 border-yellow-300 shadow-lg" 
-                        style={{ 
-                          backgroundColor: (() => {
-                            // reference-colors.ts'den doğru rengi al
-                            const { referenceColors } = require('@/data/reference-colors')
-                            return referenceColors[selectedCityForColor.toLowerCase()] || '#d1d5db'
-                          })()
-                        }}
-                      />
-                      <div className="flex-1">
-                        <div className="text-sm font-bold text-yellow-800 mb-1">Orijinal Renk</div>
-                        <code className="text-xs font-mono text-yellow-700 bg-white px-2 py-1 rounded border">
-                          {(() => {
-                            // reference-colors.ts'den doğru rengi al
-                            const { referenceColors } = require('@/data/reference-colors')
-                            return referenceColors[selectedCityForColor.toLowerCase()] || '#d1d5db'
-                          })()}
+                          {cityColors[selectedCityForColor] || defaultColors[selectedCityForColor.toLowerCase()] || referenceColors[selectedCityForColor.toLowerCase()] || 'Veritabanında kayıtlı değil'}
                         </code>
                       </div>
                     </div>
@@ -1055,6 +905,7 @@ export default function TurkeyMap({
                         await clearAllData()
                         setCounts({})
                         setCityColors({})
+                        setDefaultColors({}) // defaultColors state'ini de temizle
                         console.log('Tüm veriler temizlendi')
                       } catch (error) {
                         console.error('Temizleme hatası:', error)
@@ -1078,89 +929,7 @@ export default function TurkeyMap({
                  // Tüm Türkiye şehirleri
                  "Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Aksaray", "Amasya", "Ankara", "Antalya", "Ardahan", "Artvin", "Aydın", "Balıkesir", "Bartın", "Batman", "Bayburt", "Bilecik", "Bingöl", "Bitlis", "Bolu", "Burdur", "Bursa", "Çanakkale", "Çankırı", "Çorum", "Denizli", "Diyarbakır", "Düzce", "Edirne", "Elazığ", "Erzincan", "Erzurum", "Eskişehir", "Gaziantep", "Giresun", "Gümüşhane", "Hakkari", "Hatay", "Iğdır", "Isparta", "İstanbul", "İzmir", "Kahramanmaraş", "Karabük", "Karaman", "Kars", "Kastamonu", "Kayseri", "Kırıkkale", "Kırklareli", "Kırşehir", "Kilis", "Kocaeli", "Konya", "Kütahya", "Malatya", "Manisa", "Mardin", "Mersin", "Muğla", "Muş", "Nevşehir", "Niğde", "Ordu", "Osmaniye", "Rize", "Sakarya", "Samsun", "Şanlıurfa", "Siirt", "Sinop", "Sivas", "Şırnak", "Tekirdağ", "Tokat", "Trabzon", "Tunceli", "Uşak", "Van", "Yalova", "Yozgat", "Zonguldak"
                ].map((cityName) => {
-                 const defaultColor = (() => {
-                   const refColors: Record<string, string> = {
-                     "İstanbul": "#f59e0b",
-                     "ankara": "#fde047",
-                     "antalya": "#d79775",
-                     "bursa": "#86efac",
-                     "diyarbakir": "#c084fc",
-                     "duzce": "#d1d5db",
-                     "erzurum": "#fde047",
-                     "eskisehir": "#d1d5db",
-                     "gaziantep": "#22c55e",
-                     "izmir": "#93c5fd",
-                     "kayseri": "#d1d5db",
-                     "konya": "#fda4af",
-                     "muğla": "#1e40af",
-                     "samsun": "#fdba74",
-                     "trabzon": "#c084fc",
-                     "adana": "#fbbf24",
-                     "balikesir": "#86efac",
-                     "edirne": "#f59e0b",
-                     "tekirdag": "#f59e0b",
-                     "kocaeli": "#f59e0b",
-                     "sakarya": "#f59e0b",
-                     "yalova": "#86efac",
-                     "canakkale": "#86efac",
-                     "bilecik": "#d1d5db",
-                     "kutahya": "#d1d5db",
-                     "bolu": "#d1d5db",
-                     "manisa": "#93c5fd",
-                     "usak": "#93c5fd",
-                     "aydin": "#1e40af",
-                     "denizli": "#1e40af",
-                     "mugla": "#1e40af",
-                     "mersin": "#fbbf24",
-                     "osmaniye": "#fbbf24",
-                     "hatay": "#fbbf24",
-                     "burdur": "#d79775",
-                     "isparta": "#d79775",
-                     "afyonkarahisar": "#d1d5db",
-                     "kirikkale": "#fde047",
-                     "cankiri": "#fde047",
-                     "kastamonu": "#fde047",
-                     "nevsehir": "#d1d5db",
-                     "nigde": "#d1d5db",
-                     "yozgat": "#d1d5db",
-                     "sivas": "#d1d5db",
-                     "kirsehir": "#d1d5db",
-                     "aksaray": "#d1d5db",
-                     "sinop": "#fdba74",
-                     "corum": "#fdba74",
-                     "amasya": "#fdba74",
-                     "tokat": "#fdba74",
-                     "ordu": "#fdba74",
-                     "giresun": "#c084fc",
-                     "gumushane": "#c084fc",
-                     "bayburt": "#c084fc",
-                     "rize": "#c084fc",
-                     "artvin": "#c084fc",
-                     "zonguldak": "#d1d5db",
-                     "karabuk": "#d1d5db",
-                     "bartin": "#d1d5db",
-                     "erzincan": "#fde047",
-                     "kars": "#fde047",
-                     "ardahan": "#fde047",
-                     "igdir": "#fde047",
-                     "agri": "#fde047",
-                     "kahramanmaras": "#22c55e",
-                     "adiyaman": "#22c55e",
-                     "sanliurfa": "#22c55e",
-                     "kilis": "#22c55e",
-                     "mardin": "#c084fc",
-                     "batman": "#c084fc",
-                     "siirt": "#c084fc",
-                     "sirnak": "#c084fc",
-                     "malatya": "#c084fc",
-                     "tunceli": "#c084fc",
-                     "elazig": "#c084fc",
-                     "bingol": "#c084fc",
-                     "mus": "#c084fc",
-                     "karaman": "#fda4af"
-                   }
-                   return refColors[cityName.toLowerCase()] || '#d1d5db'
-                 })()
+                 const displayColor = cityColors[cityName.toLowerCase()] || defaultColors[cityName.toLowerCase()] || referenceColors[cityName.toLowerCase()] || '#d1d5db'
                  
                  return (
                    <div key={cityName} className="bg-white rounded-lg p-4 border border-gray-200 hover:border-blue-300 transition-all duration-200 hover:shadow-md group">
@@ -1168,7 +937,7 @@ export default function TurkeyMap({
                        <div className="flex items-center gap-2">
                          <div 
                            className="w-4 h-4 rounded border border-gray-300 shadow-sm" 
-                           style={{ backgroundColor: defaultColor }}
+                           style={{ backgroundColor: displayColor }}
                          />
                          <span className="text-sm font-medium text-gray-800">{cityName}</span>
                        </div>
@@ -1193,9 +962,6 @@ export default function TurkeyMap({
                   />
                        <span className="text-xs text-gray-500 font-medium">mağaza</span>
                 </div>
-                     <div className="mt-2 text-xs text-gray-500 font-mono">
-                       {defaultColor}
-                     </div>
                    </div>
                  )
                })}
@@ -1212,7 +978,7 @@ export default function TurkeyMap({
 function paintAllDefault(svg: SVGSVGElement) {
   const allPaths = Array.from(svg.querySelectorAll("#turkiye > g[id] path")) as SVGPathElement[]
   allPaths.forEach((p) => {
-    p.setAttribute("fill", "#e5e7eb")
+    p.setAttribute("fill", "#f3f4f6")
     p.setAttribute("stroke", "#111")
     p.setAttribute("stroke-width", "0.7")
   })
@@ -1222,9 +988,31 @@ function setGroupColor(svg: SVGSVGElement, groupId: string, fill: string) {
   const normalizedId = groupId.toLowerCase()
   console.log(`🔍 SVG'de ${normalizedId} grubu aranıyor...`)
   
+  // SVG'deki tüm g elementlerini kontrol et
+  const allGroups = Array.from(svg.querySelectorAll("#turkiye > g[id]")) as SVGGElement[]
+  console.log(`🔍 SVG'de bulunan tüm gruplar:`, allGroups.map(g => g.id))
+  
   const group = svg.querySelector(`#${normalizedId}`) as SVGGElement | null
   if (!group) {
     console.warn(`❌ ${normalizedId} grubu SVG'de bulunamadı`)
+    // Alternatif olarak, şehir adına göre arama yap
+    const alternativeGroup = allGroups.find(g => {
+      const name = g.getAttribute("data-iladi") || g.id || ""
+      return name.toLowerCase() === groupId.toLowerCase()
+    })
+    
+    if (alternativeGroup) {
+      console.log(`✅ Alternatif yöntemle ${groupId} grubu bulundu: ${alternativeGroup.id}`)
+      const paths = Array.from(alternativeGroup.querySelectorAll("path")) as SVGPathElement[]
+      paths.forEach((p) => {
+        p.setAttribute("fill", fill)
+        p.setAttribute("stroke", "#111")
+        p.setAttribute("stroke-width", "0.7")
+      })
+      return
+    }
+    
+    console.warn(`❌ ${groupId} şehri hiçbir yöntemle bulunamadı`)
     return
   }
   
@@ -1237,7 +1025,11 @@ function setGroupColor(svg: SVGSVGElement, groupId: string, fill: string) {
   })
 }
 function applyReferenceColors(svg: SVGSVGElement, palette: Record<string, string>) {
-  Object.entries(palette).forEach(([id, color]) => setGroupColor(svg, id, color))
+  console.log('🎨 Reference colors uygulanıyor:', palette)
+  Object.entries(palette).forEach(([id, color]) => {
+    console.log(`🎨 ${id} şehri için reference color uygulanıyor: ${color}`)
+    setGroupColor(svg, id, color)
+  })
 }
 
 /* ---------- Depo nokta konumu hesaplama ---------- */
