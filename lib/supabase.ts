@@ -36,7 +36,7 @@ export async function getCityStoreCounts(): Promise<Record<string, number>> {
   try {
     if (!supabase) {
       console.warn('Supabase client bulunamadı, varsayılan değerler döndürülüyor')
-      return {}
+      return getDefaultStoreCounts()
     }
     
     console.log('Supabase client bulundu, veriler çekiliyor...')
@@ -48,10 +48,17 @@ export async function getCityStoreCounts(): Promise<Record<string, number>> {
     
     if (error) {
       console.error('Veri çekme hatası:', error)
-      return {}
+      console.log('Varsayılan değerler döndürülüyor')
+      return getDefaultStoreCounts()
     }
     
     console.log('Veritabanından gelen ham veriler:', data)
+    
+    // Eğer veri yoksa varsayılan değerleri döndür
+    if (!data || data.length === 0) {
+      console.log('Veritabanında veri bulunamadı, varsayılan değerler döndürülüyor')
+      return getDefaultStoreCounts()
+    }
     
     // Record<string, number> formatına çevir
     const counts: Record<string, number> = {}
@@ -64,7 +71,31 @@ export async function getCityStoreCounts(): Promise<Record<string, number>> {
     return counts
   } catch (error) {
     console.error('Veri çekme hatası:', error)
-    return {}
+    console.log('Hata durumunda varsayılan değerler döndürülüyor')
+    return getDefaultStoreCounts()
+  }
+}
+
+// Varsayılan mağaza sayıları
+function getDefaultStoreCounts(): Record<string, number> {
+  return {
+    "İstanbul - AVR": 25,
+    "İstanbul - AND": 18,
+    "ankara": 15,
+    "antalya": 12,
+    "bursa": 8,
+    "diyarbakir": 6,
+    "düzce": 4,
+    "erzurum": 5,
+    "eskisehir": 7,
+    "gaziantep": 9,
+    "izmir": 14,
+    "kayseri": 6,
+    "konya": 8,
+    "muğla": 5,
+    "samsun": 7,
+    "trabzon": 6,
+    "adana": 10
   }
 }
 
@@ -157,24 +188,6 @@ export async function initializeDatabase(): Promise<boolean> {
     
     console.log('Veritabanı başlatılıyor...')
     
-    // Önce mevcut verileri kontrol et
-    const { data: existingData, error: checkError } = await supabase
-      .from('city_store_counts')
-      .select('*')
-      .limit(1)
-    
-    if (checkError) {
-      console.log('Tablo bulunamadı, oluşturuluyor...')
-      
-      // SQL ile tablo oluştur (eğer yoksa)
-      const { error: createError } = await supabase.rpc('create_city_store_counts_table')
-      
-      if (createError) {
-        console.log('RPC ile tablo oluşturulamadı, manuel oluşturuluyor...')
-        // Manuel olarak veri eklemeye çalış
-      }
-    }
-    
     // Test verileri ekle
     const testData = [
       { city_id: "İstanbul - AVR", store_count: 25 },
@@ -196,12 +209,15 @@ export async function initializeDatabase(): Promise<boolean> {
       { city_id: "adana", store_count: 10 }
     ]
     
+    console.log('Test verileri ekleniyor:', testData)
+    
     const { error: insertError } = await supabase
       .from('city_store_counts')
       .upsert(testData, { onConflict: 'city_id' })
     
     if (insertError) {
       console.error('Test verileri eklenirken hata:', insertError)
+      console.log('Hata detayları:', insertError)
       return false
     }
     

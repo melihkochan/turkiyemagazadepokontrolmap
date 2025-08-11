@@ -224,18 +224,6 @@ export default function TurkeyMap({
     loadFromDatabase()
   }, [])
 
-  // Sayfa yüklendiğinde veritabanından veri çek
-  useEffect(() => {
-    // Environment variable'ları kontrol et
-    console.log('Page load - Environment variables:', {
-      url: process.env.NEXT_PUBLIC_SUPABASE_URL,
-      hasKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      env: process.env.NODE_ENV
-    })
-    
-    loadFromDatabase()
-  }, [])
-
   // Veritabanından veri çek
   const loadFromDatabase = async () => {
     setDbLoading(true)
