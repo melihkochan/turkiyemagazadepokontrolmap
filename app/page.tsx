@@ -12,7 +12,7 @@ export default function Page() {
 
   return (
     <main className="min-h-screen w-full">
-      <div className="mx-auto w-full max-w-[1400px] px-2 py-1">
+              <div className="mx-auto w-full max-w-[1800px] px-2 py-1">
         {/* Ana Başlık */}
         <div className="text-center mb-3">
           <div className="flex items-center justify-center gap-2 mb-2">
@@ -50,7 +50,7 @@ export default function Page() {
             defaultSelectedCityIds={depotCityIds}
             defaultRadiusKm={150}
             storeCounts={storeCounts}
-            mapHeightClass="min-h-[65vh]"
+            mapHeightClass="min-h-[85vh]"
           />
         )}
 

@@ -55,7 +55,6 @@ export const referenceColors: Record<string, string> = {
   duzce: GREY,
 
   // Akdeniz turuncu (genel) - Mersin ve Adana daha açık turuncu
-  antalya: "#f97316", // Daha koyu turuncu (yukarıda tanımlandı)
   mersin: "#fbbf24", // Daha açık turuncu
   adana: "#fbbf24", // Daha açık turuncu
   osmaniye: "#fbbf24", // Daha açık turuncu
@@ -101,12 +100,10 @@ export const referenceColors: Record<string, string> = {
 
   // Antalya & Burdur aynı renkte ama Mersin/Adana'dan farklı
   burdur: "#d79775", // Somon/kahverengi turuncu
-  antalya: "#d79775", // Somon/kahverengi turuncu
-  isparta: LILAC,
-  
-  // Afyonkarahisar Eskişehir ile aynı renk, Isparta Burdur ile aynı renk
-  afyonkarahisar: GREY,
   isparta: "#d79775", // Somon/kahverengi turuncu (Burdur ile aynı)
+  
+  // Afyonkarahisar Eskişehir ile aynı renk
+  afyonkarahisar: GREY,
 
   // Kalan Doğu/İç bölgeler için önceki genel atamalar (örnekleri koruyoruz)
   kayseri: GREY,

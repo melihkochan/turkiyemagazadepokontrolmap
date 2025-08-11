@@ -33,6 +33,16 @@ export interface CityStoreCount {
   updated_at: string
 }
 
+// Şehir renkleri için tip tanımı
+export interface CityColor {
+  id: number
+  city_id: string
+  city_name: string
+  color: string
+  created_at: string
+  updated_at: string
+}
+
 // Şehir mağaza sayılarını getir
 export async function getCityStoreCounts(): Promise<Record<string, number>> {
   try {
@@ -158,81 +168,340 @@ export async function updateMultipleCityStoreCounts(
   }
 }
 
-// Tüm test verilerini temizle
+// Tüm verileri temizle
 export async function clearAllData(): Promise<boolean> {
   try {
     if (!supabase) {
-      console.warn('Supabase client bulunamadı, temizleme yapılamıyor')
+      console.warn('Supabase client bulunamadı, veriler temizlenemiyor')
       return false
     }
     
     console.log('Tüm veriler temizleniyor...')
     
-    const { error } = await supabase
+    // Şehir mağaza sayılarını temizle
+    const { error: storeCountsError } = await supabase
       .from('city_store_counts')
       .delete()
-      .neq('id', 0) // Tüm kayıtları sil
+      .neq('id', 0)
     
-    if (error) {
-      console.error('Veri temizleme hatası:', error)
+    if (storeCountsError) {
+      console.error('Mağaza sayıları temizleme hatası:', storeCountsError)
       return false
     }
     
-    console.log('Tüm veriler başarıyla temizlendi!')
-    return true
+    // Şehir renklerini temizle
+    const { error: colorsError } = await supabase
+      .from('city_colors')
+      .delete()
+      .neq('id', 0)
     
+    if (colorsError) {
+      console.error('Şehir renkleri temizleme hatası:', colorsError)
+      return false
+    }
+    
+    console.log('Tüm veriler başarıyla temizlendi')
+    return true
   } catch (error) {
     console.error('Veri temizleme hatası:', error)
     return false
   }
 }
 
-// Tablo oluştur ve test verileri ekle
+// Veritabanını başlat
 export async function initializeDatabase(): Promise<boolean> {
+  try {
+    if (!supabase) {
+      console.warn('Supabase client bulunamadı, veritabanı başlatılamıyor')
+      return false
+    }
+    
+    console.log('Veritabanı başlatılıyor...')
+    
+    // Şehir mağaza sayıları tablosunu başlat
+    const storeCountsResult = await initializeStoreCountsTable()
+    if (!storeCountsResult) {
+      console.error('Şehir mağaza sayıları tablosu başlatılamadı')
+      return false
+    }
+    
+    // Şehir renkleri tablosunu başlat
+    const colorsResult = await initializeCityColorsTable()
+    if (!colorsResult) {
+      console.error('Şehir renkleri tablosu başlatılamadı')
+      return false
+    }
+    
+    console.log('Veritabanı başarıyla başlatıldı')
+    return true
+  } catch (error) {
+    console.error('Veritabanı başlatma hatası:', error)
+    return false
+  }
+}
+
+// Şehir renklerini getir
+export async function getCityColors(): Promise<Record<string, string>> {
+  try {
+    if (!supabase) {
+      console.warn('Supabase client bulunamadı, boş obje döndürülüyor')
+      return {}
+    }
+    
+    console.log('Şehir renkleri çekiliyor...')
+    
+    const { data, error } = await supabase
+      .from('city_colors')
+      .select('city_id, city_name, color')
+      .order('city_id')
+    
+    if (error) {
+      console.error('Renk verisi çekme hatası:', error)
+      return {}
+    }
+    
+    if (!data || data.length === 0) {
+      console.log('Veritabanında renk verisi bulunamadı')
+      return {}
+    }
+    
+    const colors: Record<string, string> = {}
+    data?.forEach(row => {
+      // city_name'i key olarak kullan, city_id'yi log'da göster
+      colors[row.city_name] = row.color
+      console.log(`Şehir: ${row.city_name}, ID: ${row.city_id}, Renk: ${row.color}`)
+    })
+    
+    console.log('İşlenmiş renk verileri:', colors)
+    return colors
+  } catch (error) {
+    console.error('Renk verisi çekme hatası:', error)
+    return {}
+  }
+}
+
+// Şehir rengini güncelle
+export async function updateCityColor(
+  cityName: string, 
+  color: string
+): Promise<boolean> {
+  try {
+    if (!supabase) {
+      console.warn('Supabase client bulunamadı, renk güncellenemiyor')
+      return false
+    }
+    
+    console.log(`🔍 Güncelleme öncesi kontrol: ${cityName} şehri için renk ${color} olarak güncellenecek`)
+    
+    // Önce şehri bul
+    const { data: existingCity, error: findError } = await supabase
+      .from('city_colors')
+      .select('city_id, city_name, color')
+      .eq('city_name', cityName)
+      .single()
+    
+    if (findError) {
+      console.error(`❌ Şehir bulunamadı: ${cityName}`, findError)
+      return false
+    }
+    
+    console.log(`✅ Şehir bulundu:`, existingCity)
+    
+    // Şimdi güncelle
+    const { error } = await supabase
+      .from('city_colors')
+      .update({ color: color })
+      .eq('city_name', cityName)
+    
+    if (error) {
+      console.error('❌ Renk güncelleme hatası:', error)
+      return false
+    }
+    
+    // Güncelleme sonrası kontrol
+    const { data: updatedCity, error: checkError } = await supabase
+      .from('city_colors')
+      .select('city_id, city_name, color')
+      .eq('city_name', cityName)
+      .single()
+    
+    if (checkError) {
+      console.error('❌ Güncelleme sonrası kontrol hatası:', checkError)
+    } else {
+      console.log(`✅ Güncelleme sonrası:`, updatedCity)
+    }
+    
+    console.log(`🎉 ${cityName} şehri için renk güncellendi: ${color}`)
+    return true
+  } catch (error) {
+    console.error('❌ Renk güncelleme hatası:', error)
+    return false
+  }
+}
+
+// Birden fazla şehir rengini güncelle
+export async function updateMultipleCityColors(
+  updates: Record<string, string>
+): Promise<boolean> {
+  try {
+    if (!supabase) {
+      console.warn('Supabase client bulunamadı, renkler güncellenemiyor')
+      return false
+    }
+    
+    console.log('Birden fazla şehir rengi güncelleniyor:', updates)
+    
+    const promises = Object.entries(updates).map(([cityName, color]) =>
+      updateCityColor(cityName, color)
+    )
+    
+    const results = await Promise.all(promises)
+    const success = results.every(result => result === true)
+    
+    if (success) {
+      console.log('Tüm şehir renkleri başarıyla güncellendi')
+    } else {
+      console.warn('Bazı şehir renkleri güncellenemedi')
+    }
+    
+    return success
+  } catch (error) {
+    console.error('Toplu renk güncelleme hatası:', error)
+    return false
+  }
+}
+
+// Şehir renkleri tablosunu oluştur ve varsayılan renkleri ekle
+export async function initializeCityColorsTable(): Promise<boolean> {
+  try {
+    if (!supabase) {
+      console.warn('Supabase client bulunamadı, renk tablosu oluşturulamıyor')
+      return false
+    }
+    
+    console.log('Şehir renkleri tablosu kontrol ediliyor...')
+    
+    // Önce tablo var mı kontrol et
+    const { data: existingData, error: checkError } = await supabase
+      .from('city_colors')
+      .select('count')
+      .limit(1)
+    
+    if (checkError && checkError.code === '42P01') {
+      // Tablo yok, oluştur
+      console.log('city_colors tablosu bulunamadı, oluşturuluyor...')
+      
+      const { error: createError } = await supabase.rpc('create_city_colors_table')
+      
+      if (createError) {
+        console.error('Tablo oluşturma hatası:', createError)
+        return false
+      }
+      
+      console.log('city_colors tablosu oluşturuldu')
+    } else if (existingData && existingData.length > 0) {
+      console.log('city_colors tablosu zaten mevcut ve veri içeriyor')
+      return true
+    }
+    
+    // Varsayılan renkleri ekle
+    console.log('Varsayılan şehir renkleri ekleniyor...')
+    
+    const { referenceColors } = await import('@/data/reference-colors')
+    const { depotCityIds } = await import('@/data/depot-cities')
+    
+    // Sadece depot-cities'deki şehirler için renk ekle
+    const defaultColors = depotCityIds.map(cityId => {
+      const color = referenceColors[cityId.toLowerCase()] || '#d1d5db' // Varsayılan gri
+      return {
+        city_id: cityId,
+        city_name: cityId, // city_id ile aynı (çünkü depot-cities'de zaten şehir adları var)
+        color: color
+      }
+    })
+    
+    console.log('Eklenecek varsayılan renkler:', defaultColors)
+    
+    const { error: insertError } = await supabase
+      .from('city_colors')
+      .insert(defaultColors)
+    
+    if (insertError) {
+      console.error('Varsayılan renk ekleme hatası:', insertError)
+      return false
+    }
+    
+    console.log('Varsayılan şehir renkleri başarıyla eklendi')
+    return true
+  } catch (error) {
+    console.error('Şehir renkleri tablosu başlatma hatası:', error)
+    return false
+  }
+}
+
+// Tüm şehir renklerini temizle
+export async function clearAllCityColors(): Promise<boolean> {
+  try {
+    if (!supabase) {
+      console.warn('Supabase client bulunamadı, renkler temizlenemiyor')
+      return false
+    }
+    
+    const { error } = await supabase
+      .from('city_colors')
+      .delete()
+      .neq('id', 0)
+    
+    if (error) {
+      console.error('Renk temizleme hatası:', error)
+      return false
+    }
+    
+    console.log('Tüm şehir renkleri temizlendi')
+    return true
+  } catch (error) {
+    console.error('Renk temizleme hatası:', error)
+    return false
+  }
+}
+
+// Şehir mağaza sayıları tablosunu başlat
+export async function initializeStoreCountsTable(): Promise<boolean> {
   try {
     if (!supabase) {
       console.warn('Supabase client bulunamadı, tablo oluşturulamıyor')
       return false
     }
     
-    console.log('Veritabanı başlatılıyor...')
+    console.log('Şehir mağaza sayıları tablosu kontrol ediliyor...')
     
-    // Sadece tablo varlığını kontrol et
+    // Önce tablo var mı kontrol et
     const { data: existingData, error: checkError } = await supabase
       .from('city_store_counts')
-      .select('*')
+      .select('count')
       .limit(1)
     
-    if (checkError) {
-      console.log('Tablo bulunamadı, oluşturuluyor...')
+    if (checkError && checkError.code === '42P01') {
+      // Tablo yok, oluştur
+      console.log('city_store_counts tablosu bulunamadı, oluşturuluyor...')
       
-      // SQL ile tablo oluştur (eğer yoksa)
-      const { error: createError } = await supabase.rpc('exec_sql', {
-        sql: `
-          CREATE TABLE IF NOT EXISTS city_store_counts (
-            id SERIAL PRIMARY KEY,
-            city_id TEXT UNIQUE NOT NULL,
-            city_name TEXT,
-            store_count INTEGER DEFAULT 0,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-          );
-        `
-      })
+      const { error: createError } = await supabase.rpc('create_city_store_counts_table')
       
       if (createError) {
-        console.log('RPC ile tablo oluşturulamadı, manuel oluşturuluyor...')
-        console.log('Tablo oluşturulamadı, mevcut tabloyu kullanmaya çalışıyoruz...')
+        console.error('Tablo oluşturma hatası:', createError)
+        return false
       }
-    } else {
-      console.log('Tablo zaten mevcut, gerçek veriler kullanılıyor...')
+      
+      console.log('city_store_counts tablosu oluşturuldu')
+    } else if (existingData && existingData.length > 0) {
+      console.log('city_store_counts tablosu zaten mevcut ve veri içeriyor')
+      return true
     }
     
-    console.log('Veritabanı başarıyla başlatıldı!')
+    console.log('Şehir mağaza sayıları tablosu hazır')
     return true
-    
   } catch (error) {
-    console.error('Veritabanı başlatma hatası:', error)
+    console.error('Şehir mağaza sayıları tablosu başlatma hatası:', error)
     return false
   }
 }

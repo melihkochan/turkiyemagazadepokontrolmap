@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -12,7 +12,7 @@ import { referenceColors } from "@/data/reference-colors"
 import { depotCityIds as defaultDepots } from "@/data/depot-cities"
 import { depotCityCoords } from "@/data/depot-coordinates"
 import { getDynamicStoreCounts } from "@/data/store-counts"
-import { getCityStoreCounts, updateCityStoreCount, updateMultipleCityStoreCounts, initializeDatabase, clearAllData } from "@/lib/supabase"
+import { getCityStoreCounts, updateCityStoreCount, updateMultipleCityStoreCounts, initializeDatabase, clearAllData, getCityColors, updateCityColor, updateMultipleCityColors, clearAllCityColors } from "@/lib/supabase"
 import jsPDF from "jspdf"
 
 const RING_PALETTE = [
@@ -117,28 +117,30 @@ function geodesicCirclePath(lat: number, lon: number, radiusKm: number, svg: SVG
 export default function TurkeyMap({
   defaultSelectedCityIds = defaultDepots,
   defaultRadiusKm = 150,
-  mapHeightClass = "min-h-[88vh]",
+  mapHeightClass = "min-h-[100vh]", // Haritayı tam ekran yaptım
 }: Props) {
+  const [selectedCityIds, setSelectedCityIds] = useState<Set<string>>(new Set(defaultSelectedCityIds))
+  const [radiusKm, setRadiusKm] = useState(defaultRadiusKm)
+  const [counts, setCounts] = useState<Record<string, number>>({})
+  const [cityColors, setCityColors] = useState<Record<string, string>>({})
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [dbLoading, setDbLoading] = useState(false)
+  const [colorLoading, setColorLoading] = useState(false)
+  const [selectedCityForColor, setSelectedCityForColor] = useState<string>("")
+  const [newColor, setNewColor] = useState<string>("#ef4444")
+  const [debouncedColor, setDebouncedColor] = useState<string>("#ef4444")
+  const [isColorPickerOpen, setIsColorPickerOpen] = useState(false)
+  const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const svgRef = useRef<SVGSVGElement | null>(null)
 
   const [loading, setLoading] = useState(true)
   const [cities, setCities] = useState<CityPos[]>([])
   const [showLabels, setShowLabels] = useState(true)
-  const selectedCityIds = defaultSelectedCityIds
-  const [radiusKm, setRadiusKm] = useState<number>(defaultRadiusKm)
-  const [isFullscreen, setIsFullscreen] = useState(false)
-
-  const [counts, setCounts] = useState<Record<string, number>>({})
   const [searchEditor, setSearchEditor] = useState("")
-  const [dbLoading, setDbLoading] = useState(false)
 
   const getRingColor = (id: string) => {
-    // Gaziantep ve Diyarbakır için kırmızı renk
-    if (id === "gaziantep" || id === "diyarbakir") {
-      return "#ef4444" // Kırmızı renk
-    }
-    const idx = selectedCityIds.indexOf(id)
+    // Daireler için sabit renkler kullan (karışıklık olmasın)
+    const idx = Array.from(selectedCityIds).indexOf(id)
     return RING_PALETTE[(idx >= 0 ? idx : 0) % RING_PALETTE.length]
   }
 
@@ -194,7 +196,17 @@ export default function TurkeyMap({
         })
 
         paintAllDefault(svg)
+        
+        // Renkleri uygula - önce veritabanından gelen renkleri kontrol et
+        if (Object.keys(cityColors).length > 0) {
+          // Veritabanından gelen renkleri sadece şehir haritalarına uygula
+          Object.entries(cityColors).forEach(([cityName, color]) => {
+            setGroupColor(svg, cityName, color)
+          })
+        } else {
+          // Varsayılan renkleri sadece şehir haritalarına uygula
         applyReferenceColors(svg, referenceColors)
+        }
 
         if (showLabels) {
           renderLabels(labelsLayer, detected, counts, svg, new Set(selectedCityIds))
@@ -214,16 +226,37 @@ export default function TurkeyMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Component mount olduğunda veritabanından verileri otomatik yükle
+  // Component mount olduğunda verileri otomatik yükle
   useEffect(() => {
-    console.log('Component mount - veritabanından veriler yükleniyor...')
-    console.log('Environment variables check:', {
-      url: process.env.NEXT_PUBLIC_SUPABASE_URL,
-      hasKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      env: process.env.NODE_ENV
-    })
+    // Component mount olduğunda verileri yükle
     loadFromDatabase()
+    loadColorsFromDatabase()
+    
+    // Environment variables kontrolü
+    console.log('🔍 Environment Variables Check:')
+    console.log('NEXT_PUBLIC_SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? '✅ Set' : '❌ Not Set')
+    console.log('NEXT_PUBLIC_SUPABASE_ANON_KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? '✅ Set' : '❌ Not Set')
   }, [])
+
+  // cityColors değiştiğinde SVG'yi güncelle
+  useEffect(() => {
+    if (svgRef.current) {
+      console.log('cityColors değişti, SVG güncelleniyor:', cityColors)
+      
+      if (Object.keys(cityColors).length > 0) {
+        // Veritabanından gelen renkleri şehir haritalarına uygula
+        Object.entries(cityColors).forEach(([cityName, color]) => {
+          console.log(`${cityName} şehri için renk uygulanıyor: ${color}`)
+          setGroupColor(svgRef.current!, cityName, color)
+        })
+      } else {
+        // cityColors boşsa varsayılan renkleri uygula
+        console.log('cityColors boş, varsayılan renkler uygulanıyor')
+        const { referenceColors } = require('@/data/reference-colors')
+        applyReferenceColors(svgRef.current!, referenceColors)
+      }
+    }
+  }, [cityColors])
 
   // Veritabanından veri çek
   const loadFromDatabase = async () => {
@@ -244,6 +277,19 @@ export default function TurkeyMap({
     }
   }
 
+  const loadColorsFromDatabase = async () => {
+    setColorLoading(true)
+    try {
+      const dbColors = await getCityColors()
+      setCityColors(dbColors)
+      console.log('Veritabanından şehir renkleri yüklendi:', dbColors)
+    } catch (error) {
+      console.error('Veritabanından renk yükleme hatası:', error)
+    } finally {
+      setColorLoading(false)
+    }
+  }
+
   // Veritabanını başlat
   const initializeDatabaseHandler = async () => {
     setDbLoading(true)
@@ -252,6 +298,8 @@ export default function TurkeyMap({
       if (success) {
         // Başlatıldıktan sonra verileri yükle
         await loadFromDatabase()
+        await loadColorsFromDatabase()
+        console.log('Veritabanı başlatıldı ve tüm veriler yüklendi')
       }
     } catch (error) {
       console.error('Veritabanı başlatma hatası:', error)
@@ -264,13 +312,75 @@ export default function TurkeyMap({
 
   // Tek şehir güncelleme
   const updateCityCount = async (cityId: string, newCount: number) => {
+    setDbLoading(true)
     try {
       const success = await updateCityStoreCount(cityId, newCount)
       if (success) {
-        console.log(`${cityId} güncellendi: ${newCount}`)
+        setCounts(prev => ({ ...prev, [cityId]: newCount }))
+        console.log(`${cityId} şehri için mağaza sayısı güncellendi: ${newCount}`)
+      } else {
+        console.error(`${cityId} şehri için mağaza sayısı güncellenemedi`)
       }
     } catch (error) {
-      console.error('Güncelleme hatası:', error)
+      console.error('Mağaza sayısı güncelleme hatası:', error)
+    } finally {
+      setDbLoading(false)
+    }
+  }
+
+  // Debounced color update
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedColor(newColor)
+    }, 300) // 300ms gecikme
+
+    return () => clearTimeout(timer)
+  }, [newColor])
+
+  const updateCityColorHandler = async (cityName: string, newColor: string) => {
+    console.log('Renk güncelleme başlatılıyor:', { cityName, newColor })
+    setColorLoading(true)
+    try {
+      const success = await updateCityColor(cityName, newColor)
+      console.log('Renk güncelleme sonucu:', success)
+      
+      if (success) {
+        // Sadece state'i güncelle, useEffect otomatik olarak SVG'yi güncelleyecek
+        setCityColors(prev => ({ ...prev, [cityName]: newColor }))
+        console.log(`${cityName} şehri için renk güncellendi: ${newColor}`)
+      } else {
+        console.error(`${cityName} şehri için renk güncellenemedi`)
+      }
+    } catch (error) {
+      console.error('Renk güncelleme hatası:', error)
+    } finally {
+      setColorLoading(false)
+    }
+  }
+
+  const resetAllColors = async () => {
+    setColorLoading(true)
+    try {
+      const success = await clearAllCityColors()
+      if (success) {
+        setCityColors({})
+        console.log('Tüm şehir renkleri sıfırlandı')
+        
+        // SVG'de varsayılan renkleri uygula
+        if (svgRef.current) {
+          const { referenceColors } = await import('@/data/reference-colors')
+          applyReferenceColors(svgRef.current, referenceColors)
+          
+          // cityColors state'ini temizle ki SVG'de doğru renkler görünsün
+          setCityColors({})
+        }
+      } else {
+        console.error('Şehir renkleri sıfırlanamadı')
+      }
+    } catch (error) {
+      console.error('Renk sıfırlama hatası:', error)
+    } finally {
+      setColorLoading(false)
     }
   }
 
@@ -431,6 +541,45 @@ export default function TurkeyMap({
     return filtered
   }, [counts, searchEditor, cities])
 
+  // Renk seçici için mouse event handlers - useCallback ile optimize edildi
+  const handleColorMouseDown = useCallback(() => {
+    setIsColorPickerOpen(true)
+  }, [])
+
+  const handleColorMouseUp = useCallback(() => {
+    setIsColorPickerOpen(false)
+    // Mouse up'ta final rengi güncelle
+    setDebouncedColor(newColor)
+  }, [newColor])
+
+  const handleColorChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const color = e.target.value
+    setNewColor(color)
+    // Real-time güncellemeyi kaldırdık - sadece mouse up'ta güncelleniyor
+  }, [])
+
+  // Touch events için de optimize edelim
+  const handleColorTouchStart = useCallback(() => {
+    setIsColorPickerOpen(true)
+  }, [])
+
+  const handleColorTouchEnd = useCallback(() => {
+    setIsColorPickerOpen(false)
+    // Touch end'de final rengi güncelle
+    setDebouncedColor(newColor)
+  }, [newColor])
+
+  // Renk seçici için memoized değerler
+  const colorPickerProps = useMemo(() => ({
+    value: newColor,
+    onChange: handleColorChange,
+    onMouseDown: handleColorMouseDown,
+    onMouseUp: handleColorMouseUp,
+    onTouchStart: handleColorTouchStart,
+    onTouchEnd: handleColorTouchEnd,
+    className: "w-12 h-8 rounded border border-gray-300 cursor-pointer transition-colors duration-150 will-change-auto"
+  }), [newColor, handleColorChange, handleColorMouseDown, handleColorMouseUp, handleColorTouchStart, handleColorTouchEnd])
+
   return (
     <div className="flex flex-col gap-8">
       <Card>
@@ -438,18 +587,18 @@ export default function TurkeyMap({
            <div className="flex items-center gap-4">
              <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-lg border border-gray-200 shadow-sm">
                <Label htmlFor="header-radius" className="text-sm font-medium text-gray-700">🎯 Kapsama Yarıçapı:</Label>
-               <Input
-                 id="header-radius"
-                 type="number"
-                 min={10}
-                 max={600}
-                 step={10}
-                 value={radiusKm}
-                 onChange={(e) => setRadiusKm(Number(e.target.value))}
+            <Input
+              id="header-radius"
+              type="number"
+              min={10}
+              max={600}
+              step={10}
+              value={radiusKm}
+              onChange={(e) => setRadiusKm(Number(e.target.value))}
                  className="w-20 text-center font-medium border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-               />
+            />
                <span className="text-sm font-medium text-gray-600">km</span>
-             </div>
+          </div>
            </div>
            <div className="flex gap-3">
              <Button 
@@ -459,22 +608,317 @@ export default function TurkeyMap({
                className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 hover:text-gray-800"
              >
                {isFullscreen ? "🗗 Tam Ekrandan Çık" : "🔍 Tam Ekran"}
-             </Button>
+            </Button>
              <Button 
                variant="outline" 
                onClick={exportPDF}
                className="bg-white border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
              >
                📄 PDF (A3) İndir
-             </Button>
-           </div>
-         </CardHeader>
+            </Button>
+          </div>
+        </CardHeader>
         <CardContent>
-          <div className={cn("relative w-full", mapHeightClass)}>
-            <div ref={containerRef} className={cn("absolute inset-0 w-full")} />
+          {/* Harita Container */}
+          <div className="flex gap-6">
+            <div className="flex-[2] relative bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden">
+                <div
+                  ref={containerRef}
+                  className={`w-full ${mapHeightClass} bg-white`}
+                  style={{ minHeight: '600px' }}
+                />
+              
             {loading && (
-              <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">Yükleniyor…</div>
-            )}
+                <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground bg-white/80">
+                  Harita yükleniyor...
+                </div>
+              )}
+            </div>
+            
+            {/* Sağ tarafta renk değiştirme kontrolleri - PDF'de görünmez */}
+            <div className="w-72 bg-white rounded-xl border border-gray-200 shadow-lg p-5 max-h-[80vh] overflow-y-auto flex-shrink-0">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                    <span className="text-white text-lg">🎨</span>
+                  </div>
+                  <Label className="text-lg font-bold text-gray-800">Şehir Renkleri</Label>
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-sm font-semibold text-gray-700 mb-2 block">Şehir Seç</Label>
+                  <select
+                    value={selectedCityForColor}
+                    onChange={(e) => setSelectedCityForColor(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  >
+                    <option value="">Şehir seçin...</option>
+                    {[
+                      // Tüm Türkiye şehirleri
+                      "Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Aksaray", "Amasya", "Ankara", "Antalya", "Ardahan", "Artvin", "Aydın", "Balıkesir", "Bartın", "Batman", "Bayburt", "Bilecik", "Bingöl", "Bitlis", "Bolu", "Burdur", "Bursa", "Çanakkale", "Çankırı", "Çorum", "Denizli", "Diyarbakır", "Düzce", "Edirne", "Elazığ", "Erzincan", "Erzurum", "Eskişehir", "Gaziantep", "Giresun", "Gümüşhane", "Hakkari", "Hatay", "Iğdır", "Isparta", "İstanbul", "İzmir", "Kahramanmaraş", "Karabük", "Karaman", "Kars", "Kastamonu", "Kayseri", "Kırıkkale", "Kırklareli", "Kırşehir", "Kilis", "Kocaeli", "Konya", "Kütahya", "Malatya", "Manisa", "Mardin", "Mersin", "Muğla", "Muş", "Nevşehir", "Niğde", "Ordu", "Osmaniye", "Rize", "Sakarya", "Samsun", "Şanlıurfa", "Siirt", "Sinop", "Sivas", "Şırnak", "Tekirdağ", "Tokat", "Trabzon", "Tunceli", "Uşak", "Van", "Yalova", "Yozgat", "Zonguldak"
+                    ].map((cityName) => {
+                      const defaultColor = (() => {
+                        // reference-colors.ts dosyasından doğru default renkleri al
+                        const refColors: Record<string, string> = {
+                          // Marmara turuncu
+                          "istanbul": "#f59e0b",
+                          "edirne": "#f59e0b",
+                          "tekirdag": "#f59e0b",
+                          "kocaeli": "#f59e0b",
+                          "sakarya": "#f59e0b",
+                          
+                          // Kuzey Ege açık yeşil
+                          "canakkale": "#86efac",
+                          "balikesir": "#86efac",
+                          "bursa": "#86efac",
+                          "yalova": "#86efac",
+                          
+                          // Ege mavi tonları
+                          "izmir": "#93c5fd",
+                          "manisa": "#93c5fd",
+                          "usak": "#93c5fd",
+                          "aydin": "#1e40af",
+                          "denizli": "#1e40af",
+                          "mugla": "#1e40af",
+                          
+                          // Doğu Marmara / İç Ege nötr
+                          "bilecik": "#d1d5db",
+                          "kutahya": "#d1d5db",
+                          "eskisehir": "#d1d5db",
+                          "bolu": "#d1d5db",
+                          "duzce": "#d1d5db",
+                          
+                          // Akdeniz turuncu
+                          "mersin": "#fbbf24",
+                          "adana": "#fbbf24",
+                          "osmaniye": "#fbbf24",
+                          "hatay": "#fbbf24",
+                          
+                          // İç Anadolu sarı
+                          "ankara": "#fde047",
+                          "kirikkale": "#fde047",
+                          "cankiri": "#fde047",
+                          "kastamonu": "#fde047",
+                          
+                          // Orta-Karadeniz kuşağı
+                          "sinop": "#fdba74",
+                          "samsun": "#fdba74",
+                          "corum": "#fdba74",
+                          "amasya": "#fdba74",
+                          "tokat": "#fdba74",
+                          "ordu": "#fdba74",
+                          
+                          // Doğu Karadeniz kuşağı
+                          "giresun": "#c084fc",
+                          "trabzon": "#c084fc",
+                          "gumushane": "#c084fc",
+                          "bayburt": "#c084fc",
+                          "rize": "#c084fc",
+                          "artvin": "#c084fc",
+                          
+                          // Doğu üçlüsü
+                          "bitlis": "#fda4af",
+                          "van": "#fda4af",
+                          "hakkari": "#fda4af",
+                          
+                          // Güneydoğu beşlisi
+                          "kahramanmaras": "#22c55e",
+                          "adiyaman": "#22c55e",
+                          "gaziantep": "#22c55e",
+                          "sanliurfa": "#22c55e",
+                          "kilis": "#22c55e",
+                          
+                          // Konya & Karaman
+                          "konya": "#fda4af",
+                          "karaman": "#fda4af",
+                          
+                          // Antalya & Burdur
+                          "antalya": "#d79775",
+                          "burdur": "#d79775",
+                          "isparta": "#d79775",
+                          
+                          // Afyonkarahisar
+                          "afyonkarahisar": "#d1d5db",
+                          
+                          // Kalan Doğu/İç bölgeler
+                          "kayseri": "#d1d5db",
+                          "nevsehir": "#d1d5db",
+                          "nigde": "#d1d5db",
+                          "yozgat": "#d1d5db",
+                          "sivas": "#d1d5db",
+                          "kirsehir": "#d1d5db",
+                          "aksaray": "#d1d5db",
+                          
+                          // Kuzeydoğu
+                          "erzurum": "#fde047",
+                          "erzincan": "#fde047",
+                          "kars": "#fde047",
+                          "ardahan": "#fde047",
+                          "igdir": "#fde047",
+                          "agri": "#fde047",
+                          
+                          // Güneydoğu mor kütle
+                          "mardin": "#c084fc",
+                          "batman": "#c084fc",
+                          "siirt": "#c084fc",
+                          "sirnak": "#c084fc",
+                          "diyarbakir": "#c084fc",
+                          "malatya": "#c084fc",
+                          "tunceli": "#c084fc",
+                          "elazig": "#c084fc",
+                          "bingol": "#c084fc",
+                          "mus": "#c084fc",
+                          
+                          // Karadeniz batı
+                          "zonguldak": "#d1d5db",
+                          "karabuk": "#d1d5db",
+                          "bartin": "#d1d5db",
+                          
+                          // Kırklareli
+                          "kirklareli": "#f59e0b"
+                        }
+                        return refColors[cityName.toLowerCase()] || '#d1d5db'
+                      })()
+                      
+                      return (
+                        <option key={cityName} value={cityName}>
+                          {cityName} - {defaultColor}
+                        </option>
+                      )
+                    })}
+                  </select>
+                </div>
+                
+                {/* Seçilen şehrin mevcut rengini göster */}
+                {selectedCityForColor && (
+                  <div className="p-4 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl border border-gray-200">
+                    <Label className="text-sm font-semibold text-gray-700 mb-3 block">Mevcut Renk</Label>
+                    <div className="flex items-center gap-4">
+                      <div 
+                        className="w-12 h-12 rounded-xl border-2 border-gray-300 shadow-lg" 
+                        style={{ 
+                          backgroundColor: cityColors[selectedCityForColor] || (() => {
+                            const refColors: Record<string, string> = {
+                              "İstanbul": "#f59e0b",
+                              "ankara": "#fde047",
+                              "antalya": "#d79775",
+                              "bursa": "#86efac",
+                              "diyarbakir": "#c084fc",
+                              "duzce": "#d1d5db",
+                              "erzurum": "#fde047",
+                              "eskisehir": "#d1d5db",
+                              "gaziantep": "#22c55e",
+                              "izmir": "#93c5fd",
+                              "kayseri": "#d1d5db",
+                              "konya": "#fda4af",
+                              "muğla": "#1e40af",
+                              "samsun": "#fdba74",
+                              "trabzon": "#c084fc",
+                              "adana": "#fbbf24"
+                            }
+                            return refColors[selectedCityForColor.toLowerCase()] || '#d1d5db'
+                          })()
+                        }}
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm font-bold text-gray-800 mb-1">{selectedCityForColor}</div>
+                        <code className="text-xs font-mono text-gray-600 bg-white px-2 py-1 rounded border">
+                          {cityColors[selectedCityForColor] || 'Veritabanında kayıtlı değil'}
+                        </code>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Default renk bilgisi */}
+                {selectedCityForColor && (
+                  <div className="p-4 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl border border-yellow-200">
+                    <Label className="text-sm font-semibold text-yellow-800 mb-3 block">Default Renk</Label>
+                    <div className="flex items-center gap-4">
+                      <div 
+                        className="w-12 h-12 rounded-xl border-2 border-yellow-300 shadow-lg" 
+                        style={{ 
+                          backgroundColor: (() => {
+                            // reference-colors.ts'den doğru rengi al
+                            const { referenceColors } = require('@/data/reference-colors')
+                            return referenceColors[selectedCityForColor.toLowerCase()] || '#d1d5db'
+                          })()
+                        }}
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm font-bold text-yellow-800 mb-1">Orijinal Renk</div>
+                        <code className="text-xs font-mono text-yellow-700 bg-white px-2 py-1 rounded border">
+                          {(() => {
+                            // reference-colors.ts'den doğru rengi al
+                            const { referenceColors } = require('@/data/reference-colors')
+                            return referenceColors[selectedCityForColor.toLowerCase()] || '#d1d5db'
+                          })()}
+                        </code>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                <div>
+                  <Label className="text-sm font-semibold text-gray-700 mb-2 block">Yeni Renk</Label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      {...colorPickerProps}
+                      className="w-16 h-12 rounded-lg border-2 border-gray-300 cursor-pointer transition-all hover:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                    />
+                    <div className="flex-1">
+                      <div className="text-xs font-medium text-gray-600 mb-1">Seçilen Renk</div>
+                      <code className="text-sm font-mono text-gray-800 bg-gray-100 px-3 py-2 rounded-lg border">
+                        {debouncedColor}
+                      </code>
+                    </div>
+                  </div>
+                  
+                  {/* Hex input ekle */}
+                  <div className="mt-3">
+                    <Label className="text-xs font-medium text-gray-600 mb-1 block">Hex Kodu ile Gir</Label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500 text-sm">#</span>
+                      <Input
+                        type="text"
+                        placeholder="fde047"
+                        value={debouncedColor.replace('#', '')}
+                        onChange={(e) => {
+                          const value = e.target.value.replace('#', '')
+                          if (/^[0-9A-Fa-f]{6}$/.test(value)) {
+                            setDebouncedColor(`#${value}`)
+                          }
+                        }}
+                        className="flex-1 text-center font-mono text-sm border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                        maxLength={6}
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+                {selectedCityForColor && (
+                  <div>
+                    <Button
+                      onClick={() => updateCityColorHandler(selectedCityForColor, debouncedColor)}
+                      disabled={!selectedCityForColor || colorLoading}
+                      className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-3 rounded-xl shadow-lg transition-all transform hover:scale-105"
+                    >
+                      {colorLoading ? (
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          Güncelleniyor...
+                        </div>
+                      ) : (
+                        `${humanLabel(selectedCityForColor)} Rengini Değiştir`
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -491,8 +935,8 @@ export default function TurkeyMap({
                  <p className="text-sm text-gray-500">Haritada şehir isimlerini ve mağaza sayılarını göster/gizle</p>
                </div>
              </div>
-             <Switch id="labels" checked={showLabels} onCheckedChange={setShowLabels} />
-           </div>
+            <Switch id="labels" checked={showLabels} onCheckedChange={setShowLabels} />
+          </div>
 
                      <div className="space-y-4">
              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200">
@@ -500,16 +944,16 @@ export default function TurkeyMap({
                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
                    <span className="text-blue-600 text-sm">📏</span>
                  </div>
-                 <div>
+            <div>
                    <p className="text-sm text-blue-800 font-medium mb-1">
-                     Her daire şehir merkezlerinden karayolu mesafe yaklaşımıyla çizilir.
+              Her daire şehir merkezlerinden karayolu mesafe yaklaşımıyla çizilir.
                    </p>
                    <p className="text-xs text-blue-700">
-                     (Kuş uçuşu mesafenin ~3.5 katı olarak hesaplanır)
+              (Kuş uçuşu mesafenin ~3.5 katı olarak hesaplanır)
                    </p>
-                 </div>
-               </div>
-             </div>
+            </div>
+              </div>
+            </div>
              
              <div className="grid gap-4 md:grid-cols-2">
                <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-300 shadow-sm">
@@ -525,10 +969,10 @@ export default function TurkeyMap({
                        <li>• Harita projeksiyonu nedeniyle kuzey-güney yönünde biraz uzar</li>
                        <li>• Mesafe hesaplaması matematiksel olarak doğrudur</li>
                      </ul>
-                   </div>
-                 </div>
-               </div>
-               
+              </div>
+            </div>
+          </div>
+
                <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg border border-green-300 shadow-sm">
                  <div className="flex items-start gap-3">
                    <div className="w-8 h-8 bg-green-200 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -552,13 +996,13 @@ export default function TurkeyMap({
              <div className="flex items-center justify-between">
                <Label className="text-lg font-semibold text-gray-800">📍 Depo Konumları</Label>
                <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                 {selectedCityIds.length} Depo
+                 {selectedCityIds.size} Depo
                </Badge>
              </div>
              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-               {selectedCityIds.map((id) => {
-                 const coord = depotCityCoords[id]
-                 return (
+               {Array.from(selectedCityIds).map((id) => {
+                const coord = depotCityCoords[id]
+                return (
                    <div key={id} className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-3 border border-gray-200 hover:border-blue-300 transition-all duration-200 hover:shadow-md">
                      <div className="flex items-center justify-between mb-2">
                        <span className="text-sm font-medium text-gray-800">{humanLabel(id)}</span>
@@ -570,65 +1014,47 @@ export default function TurkeyMap({
                        </div>
                      )}
                    </div>
-                 )
-               })}
-             </div>
-           </div>
+                )
+              })}
+            </div>
+          </div>
 
-                     <div className="space-y-4">
-             <div className="flex items-center justify-between">
-               <Label className="text-lg font-semibold text-gray-800">🏪 Mağaza Sayıları</Label>
-               <div className="flex items-center gap-3">
-                 <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
-                   {Object.keys(counts).length} Şehir
-                 </Badge>
-                 <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                   🏪 {Object.values(counts).reduce((sum, count) => sum + (count || 0), 0)} Toplam Mağaza
-                 </Badge>
-               </div>
-             </div>
-             
-             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
-               <div className="flex flex-wrap items-center gap-3">
-                 <div className="relative flex-1 max-w-md">
-                   <Input
-                     placeholder="🔍 Şehir ara (ör: Ankara, İstanbul - AVR)"
-                     value={searchEditor}
-                     onChange={(e) => setSearchEditor(e.target.value)}
-                     className="pl-10 bg-white border-blue-300 focus:border-blue-500 focus:ring-blue-500"
-                   />
-                   <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                     🔍
-                   </div>
-                 </div>
-                 
-                                   <Button 
-                    variant="outline" 
+          <div className="space-y-4">
+             <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <Label className="text-lg font-semibold text-gray-800">🏪 Mağaza Sayıları</Label>
+                  <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                    {Object.values(counts).reduce((sum, count) => sum + count, 0)} Toplam
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-2">
+               <Button 
+                 variant="outline" 
+                    size="sm"
                     onClick={initializeDatabaseHandler}
                     disabled={dbLoading}
-                    className="bg-white border-green-300 text-green-700 hover:bg-green-50 hover:border-green-400"
+                    className="text-xs bg-green-50 border-green-300 text-green-700 hover:bg-green-100"
                   >
-                    {dbLoading ? "⏳ Başlatılıyor..." : "🚀 Veritabanını Başlat"}
+                    {dbLoading ? "Başlatılıyor..." : "🚀 Veritabanını Başlat"}
                   </Button>
-                  
-                  <Button 
-                    variant="outline" 
-                    onClick={loadFromDatabase}
-                    disabled={dbLoading}
-                    className="bg-white border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
-                  >
-                    {dbLoading ? "⏳ Yükleniyor..." : "🗄️ Veritabanından Yükle"}
-                  </Button>
-                  
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
+                    size="sm"
+                 onClick={loadFromDatabase}
+                 disabled={dbLoading}
+                    className="text-xs"
+               >
+                    {dbLoading ? "Yükleniyor..." : "Veritabanından Yükle"}
+                </Button>
+               <Button
+                    variant="outline"
+                    size="sm"
                     onClick={async () => {
                       setDbLoading(true)
                       try {
-                        // Önce veritabanından tüm verileri temizle
                         await clearAllData()
-                        // Sonra local state'i temizle
                         setCounts({})
+                        setCityColors({})
                         console.log('Tüm veriler temizlendi')
                       } catch (error) {
                         console.error('Temizleme hatası:', error)
@@ -636,42 +1062,144 @@ export default function TurkeyMap({
                         setDbLoading(false)
                       }
                     }}
-                    className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400"
+                    disabled={dbLoading}
+                    className="text-xs"
                   >
-                    🗑️ Temizle
-                  </Button>
-               </div>
+                    {dbLoading ? "Temizleniyor..." : "Temizle"}
+               </Button>
+                </div>
              </div>
 
+              {/* Renk Değiştirme Kontrolleri */}
+              {/* Moved to the right sidebar */}
+
                          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-               {editorList.map((id) => (
-                 <div key={id} className="bg-white rounded-lg p-4 border border-gray-200 hover:border-blue-300 transition-all duration-200 hover:shadow-md group">
-                   <div className="flex items-center justify-between mb-3">
-                     <span className="text-sm font-medium text-gray-800">{humanLabel(id)}</span>
-                     <div className="w-2 h-2 bg-green-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
+               {[
+                 // Tüm Türkiye şehirleri
+                 "Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Aksaray", "Amasya", "Ankara", "Antalya", "Ardahan", "Artvin", "Aydın", "Balıkesir", "Bartın", "Batman", "Bayburt", "Bilecik", "Bingöl", "Bitlis", "Bolu", "Burdur", "Bursa", "Çanakkale", "Çankırı", "Çorum", "Denizli", "Diyarbakır", "Düzce", "Edirne", "Elazığ", "Erzincan", "Erzurum", "Eskişehir", "Gaziantep", "Giresun", "Gümüşhane", "Hakkari", "Hatay", "Iğdır", "Isparta", "İstanbul", "İzmir", "Kahramanmaraş", "Karabük", "Karaman", "Kars", "Kastamonu", "Kayseri", "Kırıkkale", "Kırklareli", "Kırşehir", "Kilis", "Kocaeli", "Konya", "Kütahya", "Malatya", "Manisa", "Mardin", "Mersin", "Muğla", "Muş", "Nevşehir", "Niğde", "Ordu", "Osmaniye", "Rize", "Sakarya", "Samsun", "Şanlıurfa", "Siirt", "Sinop", "Sivas", "Şırnak", "Tekirdağ", "Tokat", "Trabzon", "Tunceli", "Uşak", "Van", "Yalova", "Yozgat", "Zonguldak"
+               ].map((cityName) => {
+                 const defaultColor = (() => {
+                   const refColors: Record<string, string> = {
+                     "İstanbul": "#f59e0b",
+                     "ankara": "#fde047",
+                     "antalya": "#d79775",
+                     "bursa": "#86efac",
+                     "diyarbakir": "#c084fc",
+                     "duzce": "#d1d5db",
+                     "erzurum": "#fde047",
+                     "eskisehir": "#d1d5db",
+                     "gaziantep": "#22c55e",
+                     "izmir": "#93c5fd",
+                     "kayseri": "#d1d5db",
+                     "konya": "#fda4af",
+                     "muğla": "#1e40af",
+                     "samsun": "#fdba74",
+                     "trabzon": "#c084fc",
+                     "adana": "#fbbf24",
+                     "balikesir": "#86efac",
+                     "edirne": "#f59e0b",
+                     "tekirdag": "#f59e0b",
+                     "kocaeli": "#f59e0b",
+                     "sakarya": "#f59e0b",
+                     "yalova": "#86efac",
+                     "canakkale": "#86efac",
+                     "bilecik": "#d1d5db",
+                     "kutahya": "#d1d5db",
+                     "bolu": "#d1d5db",
+                     "manisa": "#93c5fd",
+                     "usak": "#93c5fd",
+                     "aydin": "#1e40af",
+                     "denizli": "#1e40af",
+                     "mugla": "#1e40af",
+                     "mersin": "#fbbf24",
+                     "osmaniye": "#fbbf24",
+                     "hatay": "#fbbf24",
+                     "burdur": "#d79775",
+                     "isparta": "#d79775",
+                     "afyonkarahisar": "#d1d5db",
+                     "kirikkale": "#fde047",
+                     "cankiri": "#fde047",
+                     "kastamonu": "#fde047",
+                     "nevsehir": "#d1d5db",
+                     "nigde": "#d1d5db",
+                     "yozgat": "#d1d5db",
+                     "sivas": "#d1d5db",
+                     "kirsehir": "#d1d5db",
+                     "aksaray": "#d1d5db",
+                     "sinop": "#fdba74",
+                     "corum": "#fdba74",
+                     "amasya": "#fdba74",
+                     "tokat": "#fdba74",
+                     "ordu": "#fdba74",
+                     "giresun": "#c084fc",
+                     "gumushane": "#c084fc",
+                     "bayburt": "#c084fc",
+                     "rize": "#c084fc",
+                     "artvin": "#c084fc",
+                     "zonguldak": "#d1d5db",
+                     "karabuk": "#d1d5db",
+                     "bartin": "#d1d5db",
+                     "erzincan": "#fde047",
+                     "kars": "#fde047",
+                     "ardahan": "#fde047",
+                     "igdir": "#fde047",
+                     "agri": "#fde047",
+                     "kahramanmaras": "#22c55e",
+                     "adiyaman": "#22c55e",
+                     "sanliurfa": "#22c55e",
+                     "kilis": "#22c55e",
+                     "mardin": "#c084fc",
+                     "batman": "#c084fc",
+                     "siirt": "#c084fc",
+                     "sirnak": "#c084fc",
+                     "malatya": "#c084fc",
+                     "tunceli": "#c084fc",
+                     "elazig": "#c084fc",
+                     "bingol": "#c084fc",
+                     "mus": "#c084fc",
+                     "karaman": "#fda4af"
+                   }
+                   return refColors[cityName.toLowerCase()] || '#d1d5db'
+                 })()
+                 
+                 return (
+                   <div key={cityName} className="bg-white rounded-lg p-4 border border-gray-200 hover:border-blue-300 transition-all duration-200 hover:shadow-md group">
+                     <div className="flex items-center justify-between mb-3">
+                       <div className="flex items-center gap-2">
+                         <div 
+                           className="w-4 h-4 rounded border border-gray-300 shadow-sm" 
+                           style={{ backgroundColor: defaultColor }}
+                         />
+                         <span className="text-sm font-medium text-gray-800">{cityName}</span>
+                       </div>
+                       <div className="w-2 h-2 bg-green-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
+                     </div>
+                     <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                         value={Number.isFinite(counts[cityName]) ? counts[cityName] : 0}
+                                         onChange={(e) => {
+                       const v = Number(e.target.value)
+                           const newCounts = { ...counts, [cityName]: Number.isFinite(v) ? v : 0 }
+                       setCounts(newCounts)
+                       
+                       // Otomatik olarak veritabanına kaydet
+                       if (Number.isFinite(v)) {
+                             updateCityCount(cityName, v)
+                       }
+                     }}
+                         className="w-20 text-center font-medium border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                         min="0"
+                  />
+                       <span className="text-xs text-gray-500 font-medium">mağaza</span>
+                </div>
+                     <div className="mt-2 text-xs text-gray-500 font-mono">
+                       {defaultColor}
+                     </div>
                    </div>
-                   <div className="flex items-center gap-2">
-                     <Input
-                       type="number"
-                       value={Number.isFinite(counts[id]) ? counts[id] : 0}
-                       onChange={(e) => {
-                         const v = Number(e.target.value)
-                         const newCounts = { ...counts, [id]: Number.isFinite(v) ? v : 0 }
-                         setCounts(newCounts)
-                         
-                         // Otomatik olarak veritabanına kaydet
-                         if (Number.isFinite(v)) {
-                           updateCityCount(id, v)
-                         }
-                       }}
-                       className="w-20 text-center font-medium border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                       min="0"
-                     />
-                     <span className="text-xs text-gray-500 font-medium">mağaza</span>
-                   </div>
-                 </div>
-               ))}
-             </div>
+                 )
+               })}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -690,8 +1218,17 @@ function paintAllDefault(svg: SVGSVGElement) {
   })
 }
 function setGroupColor(svg: SVGSVGElement, groupId: string, fill: string) {
-  const group = svg.querySelector(`#${groupId}`) as SVGGElement | null
-  if (!group) return
+  // groupId'yi küçük harfe çevir (SVG ID'leri küçük harf)
+  const normalizedId = groupId.toLowerCase()
+  console.log(`🔍 SVG'de ${normalizedId} grubu aranıyor...`)
+  
+  const group = svg.querySelector(`#${normalizedId}`) as SVGGElement | null
+  if (!group) {
+    console.warn(`❌ ${normalizedId} grubu SVG'de bulunamadı`)
+    return
+  }
+  
+  console.log(`✅ ${normalizedId} grubu bulundu, renk uygulanıyor: ${fill}`)
   const paths = Array.from(group.querySelectorAll("path")) as SVGPathElement[]
   paths.forEach((p) => {
     p.setAttribute("fill", fill)

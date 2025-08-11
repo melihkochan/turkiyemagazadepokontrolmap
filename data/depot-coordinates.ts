@@ -10,10 +10,9 @@ export const depotCityCoords: Record<string, DepotCoord> = {
 
   ankara: { lat: 40.047175, lon: 32.619897 },
   antalya: { lat: 36.931355, lon: 30.774386 },
-  balikesir: { lat: 39.681012, lon: 27.893347 },
   bursa: { lat: 40.234408, lon: 29.130878 },
   diyarbakir: { lat: 37.839425, lon: 40.410098 },
-  "düzce": { lat: 40.850518, lon: 31.078438 },
+  "duzce": { lat: 40.850518, lon: 31.078438 },
   erzurum: { lat: 39.931060, lon: 41.172410 },
   eskisehir: { lat: 39.748888, lon: 30.675614 },
   gaziantep: { lat: 37.087195, lon: 37.438991 },

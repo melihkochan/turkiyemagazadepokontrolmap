@@ -1,11 +1,12 @@
 export const depotCityIds: string[] = [
+  // Gerçek depo olan şehirler (depot-coordinates.ts'de koordinatları olan)
   "İstanbul - AND",
+  "İstanbul - AVR",
   "ankara",
   "antalya",
-  "İstanbul - AVR",
   "bursa",
   "diyarbakir",
-  "düzce",
+  "duzce",
   "erzurum",
   "eskisehir",
   "gaziantep",
@@ -15,5 +16,5 @@ export const depotCityIds: string[] = [
   "muğla",
   "samsun",
   "trabzon",
-  "adana",
+  "adana"
 ]
