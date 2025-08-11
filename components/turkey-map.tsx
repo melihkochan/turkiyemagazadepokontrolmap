@@ -366,8 +366,8 @@ export default function TurkeyMap({
   }
 
   const humanLabel = (id: string) => {
-    if (id === "istanbul-avr") return "İstanbul - AVR"
-    if (id === "istanbul-and") return "İstanbul - AND"
+    if (id === "İstanbul - AVR") return "İstanbul - AVR"
+    if (id === "İstanbul - AND") return "İstanbul - AND"
     const found = cities.find((c) => c.id === id)
     return found?.name || id
   }
@@ -713,11 +713,11 @@ function getDepotDotPosition(
   if (!svg) return null
 
   // İstanbul özel durumu - farklı bölgelerde iki depo
-  if (id === "istanbul-avr" || id === "istanbul-and") {
+  if (id === "İstanbul - AVR" || id === "İstanbul - AND") {
     const g = svg.querySelector("#istanbul") as SVGGElement | null
     if (!g) return null
     const b = g.getBBox()
-    if (id === "istanbul-avr") {
+    if (id === "İstanbul - AVR") {
       return { cx: b.x + b.width * 0.15, cy: b.y + b.height * 0.45 } // Biraz sağ yukarı
     }
     return { cx: b.x + b.width * 0.73, cy: b.y + b.height * 0.85 } // Aşağıya kaydır
