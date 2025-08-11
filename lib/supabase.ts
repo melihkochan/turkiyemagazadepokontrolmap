@@ -1,9 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Environment variable'lar yoksa mock client oluştur
+export const supabase = supabaseUrl && supabaseAnonKey 
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null
 
 // Şehir mağaza sayıları için tip tanımı
 export interface CityStoreCount {
@@ -18,6 +21,11 @@ export interface CityStoreCount {
 // Şehir mağaza sayılarını getir
 export async function getCityStoreCounts(): Promise<Record<string, number>> {
   try {
+    if (!supabase) {
+      console.warn('Supabase client bulunamadı, varsayılan değerler döndürülüyor')
+      return {}
+    }
+    
     const { data, error } = await supabase
       .from('city_store_counts')
       .select('city_id, store_count')
@@ -47,6 +55,11 @@ export async function updateCityStoreCount(
   storeCount: number
 ): Promise<boolean> {
   try {
+    if (!supabase) {
+      console.warn('Supabase client bulunamadı, güncelleme yapılamıyor')
+      return false
+    }
+    
     const { error } = await supabase
       .from('city_store_counts')
       .update({ store_count: storeCount })
@@ -69,6 +82,11 @@ export async function updateMultipleCityStoreCounts(
   updates: Record<string, number>
 ): Promise<boolean> {
   try {
+    if (!supabase) {
+      console.warn('Supabase client bulunamadı, güncelleme yapılamıyor')
+      return false
+    }
+    
     console.log('Toplu güncelleme başlatılıyor:', updates)
     
     // Boş güncellemeleri filtrele
