@@ -543,12 +543,7 @@ function getDepotDotPosition(
     return { cx: adjustedCx, cy: adjustedCy }
   }
 
-  // Balıkesir özel konumu - sol yukarı kaydır
-  if (id === "balikesir") {
-    adjustedCx = city.cx - 10 // Biraz sola
-    adjustedCy = city.cy - 8  // Biraz yukarı
-    return { cx: adjustedCx, cy: adjustedCy }
-  }
+
 
   // Bursa özel konumu - 26 yazısının az sağ yukarısında
   if (id === "bursa") {

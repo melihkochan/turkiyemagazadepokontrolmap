@@ -54,12 +54,12 @@ export const referenceColors: Record<string, string> = {
   bolu: GREY,
   duzce: GREY,
 
-  // Akdeniz turuncu (genel)
-  antalya: ORANGE,
-  mersin: ORANGE,
-  adana: ORANGE,
-  osmaniye: ORANGE,
-  hatay: ORANGE,
+  // Akdeniz turuncu (genel) - Mersin ve Adana daha açık turuncu
+  antalya: "#f97316", // Daha koyu turuncu (yukarıda tanımlandı)
+  mersin: "#fbbf24", // Daha açık turuncu
+  adana: "#fbbf24", // Daha açık turuncu
+  osmaniye: "#fbbf24", // Daha açık turuncu
+  hatay: "#fbbf24", // Daha açık turuncu
 
   // İç Anadolu (isteğinize göre özel gruplar aşağıda)
   ankara: YELLOW,
@@ -99,10 +99,14 @@ export const referenceColors: Record<string, string> = {
   konya: ROSE,
   karaman: ROSE,
 
-  // Antalya & Burdur aynı; Isparta ayrı
-  burdur: ORANGE,
-  antalya: ORANGE,
+  // Antalya & Burdur aynı renkte ama Mersin/Adana'dan farklı
+  burdur: "#d79775", // Somon/kahverengi turuncu
+  antalya: "#d79775", // Somon/kahverengi turuncu
   isparta: LILAC,
+  
+  // Afyonkarahisar Eskişehir ile aynı renk, Isparta farklı açık somon rengi
+  afyonkarahisar: GREY,
+  isparta: "#f6c6ad", // Açık somon/bej tonu
 
   // Kalan Doğu/İç bölgeler için önceki genel atamalar (örnekleri koruyoruz)
   kayseri: GREY,
@@ -110,6 +114,8 @@ export const referenceColors: Record<string, string> = {
   nigde: GREY,
   yozgat: GREY,
   sivas: GREY,
+  kirsehir: GREY,
+  aksaray: GREY,
 
   // Kuzeydoğu bazıları (gerekirse ayarlanabilir)
   erzurum: YELLOW,
@@ -129,6 +135,7 @@ export const referenceColors: Record<string, string> = {
   tunceli: PURPLE,
   elazig: PURPLE,
   bingol: PURPLE,
+  mus: PURPLE,
 
   // Karadeniz batı
   zonguldak: GREY,

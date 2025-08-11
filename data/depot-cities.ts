@@ -3,7 +3,6 @@ export const depotCityIds: string[] = [
   "ankara",
   "antalya",
   "istanbul-avr",
-  "balikesir",
   "bursa",
   "diyarbakir",
   "duzce",
