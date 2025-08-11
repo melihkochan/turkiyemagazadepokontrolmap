@@ -12,7 +12,7 @@ import { referenceColors } from "@/data/reference-colors"
 import { depotCityIds as defaultDepots } from "@/data/depot-cities"
 import { depotCityCoords } from "@/data/depot-coordinates"
 import { getDynamicStoreCounts } from "@/data/store-counts"
-import { getCityStoreCounts, updateCityStoreCount, updateMultipleCityStoreCounts, initializeDatabase } from "@/lib/supabase"
+import { getCityStoreCounts, updateCityStoreCount, updateMultipleCityStoreCounts, initializeDatabase, clearAllData } from "@/lib/supabase"
 import jsPDF from "jspdf"
 
 const RING_PALETTE = [
@@ -622,7 +622,20 @@ export default function TurkeyMap({
                   
                   <Button 
                     variant="outline" 
-                    onClick={() => setCounts({})}
+                    onClick={async () => {
+                      setDbLoading(true)
+                      try {
+                        // Önce veritabanından tüm verileri temizle
+                        await clearAllData()
+                        // Sonra local state'i temizle
+                        setCounts({})
+                        console.log('Tüm veriler temizlendi')
+                      } catch (error) {
+                        console.error('Temizleme hatası:', error)
+                      } finally {
+                        setDbLoading(false)
+                      }
+                    }}
                     className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400"
                   >
                     🗑️ Temizle

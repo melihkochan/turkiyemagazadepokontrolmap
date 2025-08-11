@@ -166,6 +166,35 @@ export async function updateMultipleCityStoreCounts(
   }
 }
 
+// Tüm test verilerini temizle
+export async function clearAllData(): Promise<boolean> {
+  try {
+    if (!supabase) {
+      console.warn('Supabase client bulunamadı, temizleme yapılamıyor')
+      return false
+    }
+    
+    console.log('Tüm veriler temizleniyor...')
+    
+    const { error } = await supabase
+      .from('city_store_counts')
+      .delete()
+      .neq('id', 0) // Tüm kayıtları sil
+    
+    if (error) {
+      console.error('Veri temizleme hatası:', error)
+      return false
+    }
+    
+    console.log('Tüm veriler başarıyla temizlendi!')
+    return true
+    
+  } catch (error) {
+    console.error('Veri temizleme hatası:', error)
+    return false
+  }
+}
+
 // Tablo oluştur ve test verileri ekle
 export async function initializeDatabase(): Promise<boolean> {
   try {
