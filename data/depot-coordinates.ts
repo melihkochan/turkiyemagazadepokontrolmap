@@ -20,6 +20,7 @@ export const depotCityCoords: Record<string, DepotCoord> = {
   kayseri: { lat: 38.698640, lon: 35.352849 },
   konya: { lat: 37.928579, lon: 32.522161 },
   "muğla": { lat: 37.228004, lon: 28.522161 },
+  "mugla": { lat: 37.228004, lon: 28.522161 },
   samsun: { lat: 41.236380, lon: 36.417110 },
   trabzon: { lat: 40.885089, lon: 39.702102 },
   adana: { lat: 36.970375, lon: 35.548702 },

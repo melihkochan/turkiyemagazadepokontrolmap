@@ -1111,7 +1111,7 @@ function getDepotDotPosition(
   }
   
   // Muğla özel konumu - yazının üstünde
-  if (id === "mugla") {
+  if (id === "mugla" || id === "muğla") {
     adjustedCx = city.cx // X değişmez
     adjustedCy = city.cy - 20 // Yukarı kaydır (yazının üstü)
     return { cx: adjustedCx, cy: adjustedCy }
@@ -1167,7 +1167,28 @@ function renderLabels(
     }
 
     if (c.id !== "istanbul") {
-      const count = counts[c.id]
+      // Mağaza sayısını bul - hem ID hem de şehir adıyla eşleştir
+      let count = counts[c.id]
+      if (typeof count !== "number") {
+        // ID bulunamadıysa şehir adıyla dene
+        count = counts[c.name]
+      }
+      if (typeof count !== "number") {
+        // Şehir adı da bulunamadıysa küçük harfle dene
+        count = counts[c.name.toLowerCase()]
+      }
+      if (typeof count !== "number") {
+        // Türkçe karakterleri normalize et
+        const normalizedName = c.name.toLowerCase()
+          .replace('ı', 'i')
+          .replace('ğ', 'g')
+          .replace('ü', 'u')
+          .replace('ş', 's')
+          .replace('ö', 'o')
+          .replace('ç', 'c')
+        count = counts[normalizedName]
+      }
+      
       if (typeof count === "number") {
         const qty = document.createElementNS(ns, "text")
         qty.setAttribute("x", String(c.cx))
