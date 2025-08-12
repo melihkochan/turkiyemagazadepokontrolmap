@@ -13,7 +13,7 @@ export const depotCityIds: string[] = [
   "izmir",
   "kayseri",
   "konya",
-  "muğla",
+  "Muğla",
   "mugla",
   "samsun",
   "trabzon",
