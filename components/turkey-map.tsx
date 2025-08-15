@@ -681,11 +681,11 @@ export default function TurkeyMap({
                         return defaultColors[cityName.toLowerCase()] || cityColors[cityName.toLowerCase()] || referenceColors[cityName.toLowerCase()] || '#d1d5db'
                       })()
                       
-                      return (
-                        <option key={cityName} value={cityName}>
-                          {cityName} - {defaultColor}
-                        </option>
-                      )
+                                             return (
+                         <option key={cityName} value={cityName}>
+                           {cityName}
+                         </option>
+                       )
                     })}
                   </select>
                 </div>
@@ -933,14 +933,10 @@ export default function TurkeyMap({
                  
                  return (
                    <div key={cityName} className="bg-white rounded-lg p-4 border border-gray-200 hover:border-blue-300 transition-all duration-200 hover:shadow-md group">
-                     <div className="flex items-center justify-between mb-3">
-                       <div className="flex items-center gap-2">
-                         <div 
-                           className="w-4 h-4 rounded border border-gray-300 shadow-sm" 
-                           style={{ backgroundColor: displayColor }}
-                         />
-                         <span className="text-sm font-medium text-gray-800">{cityName}</span>
-                       </div>
+                                           <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-800">{cityName}</span>
+                        </div>
                        <div className="w-2 h-2 bg-green-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
                      </div>
                      <div className="flex items-center gap-2">
