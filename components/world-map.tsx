@@ -51,6 +51,7 @@ export default function WorldMap({
   const [isMeasuring, setIsMeasuring] = useState(false)
   const [measurementPoints, setMeasurementPoints] = useState<MeasurementPoint[]>([])
   const [measurementMode, setMeasurementMode] = useState<'air' | 'road'>('air')
+  const [excludeMarmara, setExcludeMarmara] = useState(false)
   const mapRef = useRef<any>(null)
 
   useEffect(() => {
@@ -190,8 +191,24 @@ export default function WorldMap({
                 const coord = depotCityCoords[id]
                 if (!coord) return null
                 
-                                 const color = getRingColor(id) // Her depo farklı renk
-                 const radiusMeters = radiusKm * 1000 / 3.5 // 3.5 çarpanı karayolu mesafesi için
+                // Marmara bölgesinde kapsama yarıçapı hesaplamasından hariç tutulacak şehirler
+                const excludedFromRadius = new Set([
+                  "İstanbul - AVR",
+                  "İstanbul - AND", 
+                  "duzce",
+                  "bursa",
+                  "eskisehir"
+                ])
+                
+                const color = getRingColor(id) // Her depo farklı renk
+                // Marmara bölgesindeki hariç tutulan şehirler için sabit yarıçap kullan (sadece excludeMarmara aktifse)
+                const effectiveRadius = (excludeMarmara && excludedFromRadius.has(id)) ? 150 : radiusKm
+                const radiusMeters = effectiveRadius * 1000 / 3.5 // 3.5 çarpanı karayolu mesafesi için
+                
+                // Debug bilgisi
+                if (excludedFromRadius.has(id)) {
+                  console.log(`🔍 Dünya haritasında ${id} şehri için: excludeMarmara=${excludeMarmara}, effectiveRadius=${effectiveRadius}km`)
+                }
                 
                 return (
                   <div key={id}>
@@ -250,7 +267,7 @@ export default function WorldMap({
                            <small>
                              Lat: {coord.lat.toFixed(3)}<br/>
                              Lon: {coord.lon.toFixed(3)}<br/>
-                             Yarıçap: {radiusKm}km
+                             Yarıçap: {effectiveRadius}km
                            </small>
                            {isMeasuring && (
                              <div className="mt-2">
@@ -424,9 +441,17 @@ export default function WorldMap({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="world-radius">Görselleştirme Yarıçapı</Label>
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center justify-between bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <span className="text-blue-600 text-lg">🎯</span>
+              </div>
+              <div>
+                <Label htmlFor="world-radius" className="text-base font-medium text-gray-800">Görselleştirme Yarıçapı</Label>
+                <p className="text-sm text-gray-500">Dünya haritasında görsel yarıçap boyutu</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
               <Input
                 id="world-radius"
                 type="number"
@@ -435,13 +460,31 @@ export default function WorldMap({
                 step={50}
                 value={radiusKm}
                 onChange={(e) => setRadiusKm(Number(e.target.value))}
-                className="w-32"
+                className="w-32 text-center font-medium border-gray-300 focus:border-blue-500 focus:ring-blue-500"
               />
-              <span className="text-xs text-muted-foreground">
-                Dünya haritasında görsel yarıçap boyutu
-              </span>
+              <span className="text-sm font-medium text-gray-600">km</span>
             </div>
           </div>
+
+          <div className="flex items-center justify-between bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                <span className="text-red-600 text-lg">🚫</span>
+              </div>
+              <div>
+                <Label htmlFor="world-exclude-marmara" className="text-base font-medium text-gray-800">Marmara Bölgesini Katma</Label>
+                <p className="text-sm text-gray-500">İST-AVR, İST-AND, Düzce, Bursa, Eskişehir dairelerini sabit tut</p>
+              </div>
+            </div>
+            <Switch 
+              id="world-exclude-marmara" 
+              checked={excludeMarmara} 
+              onCheckedChange={setExcludeMarmara}
+              className="data-[state=checked]:bg-blue-600"
+            />
+          </div>
+
+
 
           <div className="space-y-3">
             <Label>Depo Konumları (Global Koordinatlar)</Label>

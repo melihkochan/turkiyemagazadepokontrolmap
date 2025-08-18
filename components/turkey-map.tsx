@@ -131,6 +131,7 @@ export default function TurkeyMap({
   const [newColor, setNewColor] = useState<string>("#ef4444")
   const [debouncedColor, setDebouncedColor] = useState<string>("#ef4444")
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false)
+  const [excludeMarmara, setExcludeMarmara] = useState(false)
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -421,6 +422,15 @@ export default function TurkeyMap({
     if (!ringsLayer) return
     ringsLayer.innerHTML = ""
 
+    // Marmara bölgesinde kapsama yarıçapı hesaplamasından hariç tutulacak şehirler
+    const excludedFromRadius = new Set([
+      "İstanbul - AVR",
+      "İstanbul - AND", 
+      "duzce",
+      "bursa",
+      "eskisehir"
+    ])
+
     selectedCityIds.forEach((id) => {
       const dotPos = getDepotDotPosition(id, cities, svg)
       if (!dotPos) return
@@ -429,10 +439,19 @@ export default function TurkeyMap({
       const { lat, lon } = svgToLatLon(dotPos.cx, dotPos.cy, svg)
       const color = getRingColor(id) // Her depo farklı renk
       const label = humanLabel(id)
-      const d = geodesicCirclePath(lat, lon, radiusKm, svg, 3)
+      
+      // Marmara bölgesindeki hariç tutulan şehirler için sabit yarıçap kullan (sadece excludeMarmara aktifse)
+      const effectiveRadius = (excludeMarmara && excludedFromRadius.has(id)) ? 150 : radiusKm
+      
+      // Debug bilgisi
+      if (excludedFromRadius.has(id)) {
+        console.log(`🔍 ${id} şehri için: excludeMarmara=${excludeMarmara}, effectiveRadius=${effectiveRadius}km`)
+      }
+      
+      const d = geodesicCirclePath(lat, lon, effectiveRadius, svg, 3)
       drawRingWithDot(ringsLayer, dotPos.cx, dotPos.cy, d, color, label)
     })
-  }, [selectedCityIds, radiusKm, cities])
+  }, [selectedCityIds, radiusKm, cities, excludeMarmara])
 
   async function exportPDF() {
     const svg = svgRef.current
@@ -615,6 +634,18 @@ export default function TurkeyMap({
                  className="w-20 text-center font-medium border-gray-300 focus:border-blue-500 focus:ring-blue-500"
             />
                <span className="text-sm font-medium text-gray-600">km</span>
+          </div>
+          
+          <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-lg border border-gray-200 shadow-sm">
+            <Switch 
+              id="exclude-marmara" 
+              checked={excludeMarmara} 
+              onCheckedChange={setExcludeMarmara}
+              className="data-[state=checked]:bg-blue-600"
+            />
+            <Label htmlFor="exclude-marmara" className="text-sm font-medium text-gray-700">
+              🚫 Marmara Bölgesini Katma
+            </Label>
           </div>
            </div>
            <div className="flex gap-3">
