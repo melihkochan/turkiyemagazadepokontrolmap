@@ -426,9 +426,7 @@ export default function TurkeyMap({
     const excludedFromRadius = new Set([
       "İstanbul - AVR",
       "İstanbul - AND", 
-      "duzce",
-      "bursa",
-      "eskisehir"
+      "duzce"
     ])
 
     selectedCityIds.forEach((id) => {

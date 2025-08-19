@@ -195,9 +195,7 @@ export default function WorldMap({
                 const excludedFromRadius = new Set([
                   "İstanbul - AVR",
                   "İstanbul - AND", 
-                  "duzce",
-                  "bursa",
-                  "eskisehir"
+                  "duzce"
                 ])
                 
                 const color = getRingColor(id) // Her depo farklı renk
