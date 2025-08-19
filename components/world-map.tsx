@@ -191,9 +191,9 @@ export default function WorldMap({
                 const coord = depotCityCoords[id]
                 if (!coord) return null
                 
-                // Sabit yarıçap kullanacak şehirler ve yarıçap değerleri
+                // Sabit yarıçap kullanacak şehirler ve yarıçap değerleri (veritabanından + varsayılan)
                 const fixedRadiusCities: Record<string, number> = {
-                  "İstanbul - AVR": 150,
+                  "İstanbul - AVR": 150, // Dünya haritasında sabit kalacak
                   "İstanbul - AND": 150, 
                   "duzce": 150,
                   "bursa": 250,
@@ -447,10 +447,22 @@ export default function WorldMap({
               <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                 <span className="text-blue-600 text-lg">🎯</span>
               </div>
-              <div>
+              <div className="flex items-center gap-2">
                 <Label htmlFor="world-radius" className="text-base font-medium text-gray-800">Görselleştirme Yarıçapı</Label>
-                <p className="text-sm text-gray-500">Dünya haritasında görsel yarıçap boyutu</p>
+                <div className="relative group">
+                  <span className="text-yellow-600 text-sm cursor-help">⚠️</span>
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
+                    <div className="text-center">
+                      <div className="font-semibold mb-1">Bilgilendirme</div>
+                      <div>Bu ayar sadece görsel amaçlıdır.</div>
+                      <div>Gerçek yarıçap değişiklikleri için</div>
+                      <div>depo konumlarını düzenleyin.</div>
+                    </div>
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
+                  </div>
+                </div>
               </div>
+              <p className="text-sm text-gray-500">Dünya haritasında görsel yarıçap boyutu</p>
             </div>
             <div className="flex items-center gap-3">
               <Input
@@ -474,7 +486,7 @@ export default function WorldMap({
               </div>
               <div>
                 <Label htmlFor="world-exclude-marmara" className="text-base font-medium text-gray-800">Marmara Bölgesini Katma</Label>
-                <p className="text-sm text-gray-500">İST-AVR, İST-AND, Düzce, Bursa, Eskişehir dairelerini sabit tut</p>
+                <p className="text-sm text-gray-500">İST-AVR, İST-AND, Düzce dairelerini sabit tut</p>
               </div>
             </div>
             <Switch 

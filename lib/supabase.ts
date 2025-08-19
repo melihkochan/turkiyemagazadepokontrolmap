@@ -43,6 +43,16 @@ export interface CityColor {
   updated_at: string
 }
 
+// Şehir yarıçap değerleri için tip tanımı
+export interface CityRadius {
+  id: number
+  city_id: string
+  city_name: string
+  radius_km: number
+  created_at: string
+  updated_at: string
+}
+
 // Şehir mağaza sayılarını getir
 export async function getCityStoreCounts(): Promise<Record<string, number>> {
   try {
@@ -534,6 +544,141 @@ export async function initializeStoreCountsTable(): Promise<boolean> {
     return true
   } catch (error) {
     console.error('Şehir mağaza sayıları tablosu başlatma hatası:', error)
+    return false
+  }
+}
+
+// Şehir yarıçap değerlerini getir
+export async function getCityRadii(): Promise<Record<string, number>> {
+  try {
+    if (!supabase) {
+      console.warn('Supabase client bulunamadı, boş obje döndürülüyor')
+      return {}
+    }
+    
+    console.log('Şehir yarıçap değerleri çekiliyor...')
+    
+    const { data, error } = await supabase
+      .from('city_radii')
+      .select('city_id, city_name, radius_km')
+      .order('city_id')
+    
+    if (error) {
+      console.error('Yarıçap veri çekme hatası:', error)
+      return {}
+    }
+    
+    console.log('Veritabanından gelen yarıçap verileri:', data)
+    
+    if (!data || data.length === 0) {
+      console.log('Veritabanında yarıçap verisi bulunamadı')
+      return {}
+    }
+    
+    const radii: Record<string, number> = {}
+    data?.forEach(row => {
+      radii[row.city_name] = row.radius_km
+      console.log(`Şehir: ${row.city_name}, Yarıçap: ${row.radius_km}km`)
+    })
+    
+    console.log('İşlenmiş yarıçap verileri:', radii)
+    return radii
+  } catch (error) {
+    console.error('Yarıçap veri çekme hatası:', error)
+    return {}
+  }
+}
+
+// Şehir yarıçap değerini güncelle
+export async function updateCityRadius(
+  cityName: string, 
+  radiusKm: number
+): Promise<boolean> {
+  try {
+    if (!supabase) {
+      console.warn('Supabase client bulunamadı, yarıçap güncellenemiyor')
+      return false
+    }
+    
+    console.log(`${cityName} şehri için yarıçap güncelleniyor: ${radiusKm}km`)
+    
+    // Önce mevcut kaydı kontrol et
+    const { data: existingData, error: checkError } = await supabase
+      .from('city_radii')
+      .select('id')
+      .eq('city_name', cityName)
+      .single()
+    
+    if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = kayıt bulunamadı
+      console.error('Mevcut kayıt kontrol hatası:', checkError)
+      return false
+    }
+    
+    if (existingData) {
+      // Mevcut kaydı güncelle
+      const { error: updateError } = await supabase
+        .from('city_radii')
+        .update({ 
+          radius_km: radiusKm,
+          updated_at: new Date().toISOString()
+        })
+        .eq('city_name', cityName)
+      
+      if (updateError) {
+        console.error('Yarıçap güncelleme hatası:', updateError)
+        return false
+      }
+      
+      console.log(`${cityName} şehri için yarıçap güncellendi: ${radiusKm}km`)
+      return true
+    } else {
+      // Yeni kayıt oluştur
+      const { error: insertError } = await supabase
+        .from('city_radii')
+        .insert({
+          city_id: cityName.toLowerCase().replace(/\s+/g, '-'),
+          city_name: cityName,
+          radius_km: radiusKm,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+      
+      if (insertError) {
+        console.error('Yarıçap ekleme hatası:', insertError)
+        return false
+      }
+      
+      console.log(`${cityName} şehri için yeni yarıçap kaydı oluşturuldu: ${radiusKm}km`)
+      return true
+    }
+  } catch (error) {
+    console.error('Yarıçap güncelleme hatası:', error)
+    return false
+  }
+}
+
+// Tüm şehir yarıçap değerlerini temizle
+export async function clearAllCityRadii(): Promise<boolean> {
+  try {
+    if (!supabase) {
+      console.warn('Supabase client bulunamadı, yarıçap temizleme yapılamıyor')
+      return false
+    }
+    
+    const { error } = await supabase
+      .from('city_radii')
+      .delete()
+      .neq('id', 0) // Tüm kayıtları sil
+    
+    if (error) {
+      console.error('Yarıçap temizleme hatası:', error)
+      return false
+    }
+    
+    console.log('Tüm şehir yarıçap değerleri temizlendi')
+    return true
+  } catch (error) {
+    console.error('Yarıçap temizleme hatası:', error)
     return false
   }
 }

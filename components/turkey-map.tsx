@@ -12,7 +12,7 @@ import { referenceColors } from "@/data/reference-colors"
 import { depotCityIds as defaultDepots } from "@/data/depot-cities"
 import { depotCityCoords } from "@/data/depot-coordinates"
 import { getDynamicStoreCounts } from "@/data/store-counts"
-import { getCityStoreCounts, updateCityStoreCount, updateMultipleCityStoreCounts, initializeDatabase, clearAllData, getCityColors, updateCityColor, updateMultipleCityColors, clearAllCityColors } from "@/lib/supabase"
+import { getCityStoreCounts, updateCityStoreCount, updateMultipleCityStoreCounts, initializeDatabase, clearAllData, getCityColors, updateCityColor, updateMultipleCityColors, clearAllCityColors, getCityRadii, updateCityRadius, clearAllCityRadii } from "@/lib/supabase"
 import jsPDF from "jspdf"
 
 const RING_PALETTE = [
@@ -124,9 +124,11 @@ export default function TurkeyMap({
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [cityColors, setCityColors] = useState<Record<string, string>>({})
   const [defaultColors, setDefaultColors] = useState<Record<string, string>>({})
+  const [cityRadii, setCityRadii] = useState<Record<string, number>>({})
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [dbLoading, setDbLoading] = useState(false)
   const [colorLoading, setColorLoading] = useState(false)
+  const [radiusLoading, setRadiusLoading] = useState(false)
   const [selectedCityForColor, setSelectedCityForColor] = useState<string>("")
   const [newColor, setNewColor] = useState<string>("#ef4444")
   const [debouncedColor, setDebouncedColor] = useState<string>("#ef4444")
@@ -222,9 +224,10 @@ export default function TurkeyMap({
 
   // Component mount olduğunda verileri otomatik yükle
   useEffect(() => {
-    // Önce veritabanından renkleri yükle, sonra SVG'yi yükle
+    // Önce veritabanından renkleri ve yarıçapları yükle, sonra SVG'yi yükle
     const loadData = async () => {
       await loadColorsFromDatabase()
+      await loadRadiiFromDatabase()
       await loadFromDatabase()
     }
     loadData()
@@ -307,6 +310,20 @@ export default function TurkeyMap({
     }
   }
 
+  const loadRadiiFromDatabase = async () => {
+    setRadiusLoading(true)
+    try {
+      const dbRadii = await getCityRadii()
+      setCityRadii(dbRadii)
+      console.log('Veritabanından şehir yarıçapları yüklendi:', dbRadii)
+      console.log('🔍 Veritabanından gelen yarıçap sayısı:', Object.keys(dbRadii).length)
+    } catch (error) {
+      console.error('Veritabanından yarıçap yükleme hatası:', error)
+    } finally {
+      setRadiusLoading(false)
+    }
+  }
+
   // Veritabanını başlat
   const initializeDatabaseHandler = async () => {
     setDbLoading(true)
@@ -316,6 +333,7 @@ export default function TurkeyMap({
         // Başlatıldıktan sonra verileri yükle
         await loadFromDatabase()
         await loadColorsFromDatabase()
+        await loadRadiiFromDatabase()
         console.log('Veritabanı başlatıldı ve tüm veriler yüklendi')
       }
     } catch (error) {
@@ -402,6 +420,39 @@ export default function TurkeyMap({
     }
   }
 
+  // Debounce için timeout'ları sakla
+  const radiusUpdateTimeouts = useRef<Record<string, NodeJS.Timeout>>({})
+
+  // Şehir yarıçap değerini güncelle (debounced)
+  const updateCityRadiusHandler = async (cityName: string, newRadius: number) => {
+    // Önceki timeout'u temizle
+    if (radiusUpdateTimeouts.current[cityName]) {
+      clearTimeout(radiusUpdateTimeouts.current[cityName])
+    }
+
+    // Yeni timeout ayarla (500ms sonra güncelle)
+    radiusUpdateTimeouts.current[cityName] = setTimeout(async () => {
+      console.log('Yarıçap güncelleme başlatılıyor:', { cityName, newRadius })
+      setRadiusLoading(true)
+      try {
+        const success = await updateCityRadius(cityName, newRadius)
+        console.log('Yarıçap güncelleme sonucu:', success)
+        
+        if (success) {
+          // Sadece state'i güncelle, useEffect otomatik olarak daireleri güncelleyecek
+          setCityRadii(prev => ({ ...prev, [cityName]: newRadius }))
+          console.log(`${cityName} şehri için yarıçap güncellendi: ${newRadius}km`)
+        } else {
+          console.error(`${cityName} şehri için yarıçap güncellenemedi`)
+        }
+      } catch (error) {
+        console.error('Yarıçap güncelleme hatası:', error)
+      } finally {
+        setRadiusLoading(false)
+      }
+    }, 500) // 500ms debounce
+  }
+
   // Re-render labels on toggle/data change
   useEffect(() => {
     const svg = svgRef.current
@@ -422,14 +473,14 @@ export default function TurkeyMap({
     if (!ringsLayer) return
     ringsLayer.innerHTML = ""
 
-    // Sabit yarıçap kullanacak şehirler ve yarıçap değerleri
+    // Sabit yarıçap kullanacak şehirler ve yarıçap değerleri (veritabanından + varsayılan)
     const fixedRadiusCities: Record<string, number> = {
-      "İstanbul - AVR": 150,
-      "İstanbul - AND": 150, 
-      "duzce": 150,
-      "bursa": 250,
-      "eskisehir": 250,
-      "diyarbakir": 375
+      "İstanbul - AVR": cityRadii["İstanbul - AVR"] || 150,
+      "İstanbul - AND": cityRadii["İstanbul - AND"] || 150, 
+      "duzce": cityRadii["Düzce"] || 150,
+      "bursa": cityRadii["Bursa"] || 250,
+      "eskisehir": cityRadii["Eskişehir"] || 250,
+      "diyarbakir": cityRadii["Diyarbakır"] || 375
     }
 
     selectedCityIds.forEach((id) => {
@@ -452,7 +503,7 @@ export default function TurkeyMap({
       const d = geodesicCirclePath(lat, lon, effectiveRadius, svg, 3)
       drawRingWithDot(ringsLayer, dotPos.cx, dotPos.cy, d, color, label)
     })
-  }, [selectedCityIds, radiusKm, cities, excludeMarmara])
+  }, [selectedCityIds, radiusKm, cities, excludeMarmara, cityRadii])
 
   async function exportPDF() {
     const svg = svgRef.current
@@ -623,7 +674,21 @@ export default function TurkeyMap({
                  <CardHeader className="flex flex-row items-center justify-between gap-4 p-6 bg-gradient-to-r from-gray-50 to-blue-50 border-b border-gray-200">
            <div className="flex items-center gap-4">
              <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-lg border border-gray-200 shadow-sm">
-               <Label htmlFor="header-radius" className="text-sm font-medium text-gray-700">🎯 Kapsama Yarıçapı:</Label>
+               <div className="flex items-center gap-2">
+                 <Label htmlFor="header-radius" className="text-sm font-medium text-gray-700">🎯 Kapsama Yarıçapı:</Label>
+                 <div className="relative group">
+                   <span className="text-yellow-600 text-sm cursor-help">⚠️</span>
+                   <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
+                     <div className="text-center">
+                       <div className="font-semibold mb-1">Bilgilendirme</div>
+                       <div>Bu ayar sadece görsel amaçlıdır.</div>
+                       <div>Gerçek yarıçap değişiklikleri için</div>
+                       <div>aşağıdaki depo konumlarını kullanın.</div>
+                     </div>
+                     <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
+                   </div>
+                 </div>
+               </div>
             <Input
               id="header-radius"
               type="number"
@@ -881,24 +946,55 @@ export default function TurkeyMap({
                  {selectedCityIds.size} Depo
                </Badge>
              </div>
-             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-               {Array.from(selectedCityIds).map((id) => {
-                const coord = depotCityCoords[id]
-                return (
-                   <div key={id} className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-3 border border-gray-200 hover:border-blue-300 transition-all duration-200 hover:shadow-md">
-                     <div className="flex items-center justify-between mb-2">
-                       <span className="text-sm font-medium text-gray-800">{humanLabel(id)}</span>
-                       <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                     </div>
-                     {coord && (
-                       <div className="text-xs text-gray-600 font-mono bg-white px-2 py-1 rounded border">
-                         {coord.lat.toFixed(3)}, {coord.lon.toFixed(3)}
-                       </div>
-                     )}
-                   </div>
-                )
-              })}
-            </div>
+                           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {Array.from(selectedCityIds).map((id) => {
+                 const coord = depotCityCoords[id]
+                 const cityName = humanLabel(id)
+                 const currentRadius = cityRadii[cityName] || (() => {
+                   // Varsayılan yarıçap değerleri
+                   if (id === "İstanbul - AVR" || id === "İstanbul - AND") return 150
+                   if (id === "duzce") return 150
+                   if (id === "bursa") return 250
+                   if (id === "eskisehir") return 250
+                   if (id === "diyarbakir") return 375
+                   return radiusKm // Diğer şehirler için genel yarıçap
+                 })()
+                 
+                 return (
+                    <div key={id} className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-3 border border-gray-200 hover:border-blue-300 transition-all duration-200 hover:shadow-md">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-800">{cityName}</span>
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      </div>
+                      {coord && (
+                        <div className="text-xs text-gray-600 font-mono bg-white px-2 py-1 rounded border mb-2">
+                          {coord.lat.toFixed(3)}, {coord.lon.toFixed(3)}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          value={currentRadius}
+                          onChange={(e) => {
+                            const v = Number(e.target.value)
+                            if (Number.isFinite(v) && v > 0) {
+                              // Anında state'i güncelle (UI'da hemen görünsün)
+                              setCityRadii(prev => ({ ...prev, [cityName]: v }))
+                              // Veritabanına kaydetmeyi geciktir
+                              updateCityRadiusHandler(cityName, v)
+                            }
+                          }}
+                          className="w-20 text-center font-semibold border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm bg-white shadow-sm"
+                          min="10"
+                          max="1000"
+                          step="10"
+                        />
+                        <span className="text-sm text-gray-700 font-semibold">km</span>
+                      </div>
+                    </div>
+                 )
+               })}
+             </div>
           </div>
 
           <div className="space-y-4">
@@ -931,20 +1027,23 @@ export default function TurkeyMap({
                <Button
                     variant="outline"
                     size="sm"
-                    onClick={async () => {
-                      setDbLoading(true)
-                      try {
-                        await clearAllData()
-                        setCounts({})
-                        setCityColors({})
-                        setDefaultColors({}) // defaultColors state'ini de temizle
-                        console.log('Tüm veriler temizlendi')
-                      } catch (error) {
-                        console.error('Temizleme hatası:', error)
-                      } finally {
-                        setDbLoading(false)
-                      }
-                    }}
+                                         onClick={async () => {
+                       setDbLoading(true)
+                       try {
+                         await clearAllData()
+                         await clearAllCityColors()
+                         await clearAllCityRadii()
+                         setCounts({})
+                         setCityColors({})
+                         setDefaultColors({}) // defaultColors state'ini de temizle
+                         setCityRadii({})
+                         console.log('Tüm veriler temizlendi')
+                       } catch (error) {
+                         console.error('Temizleme hatası:', error)
+                       } finally {
+                         setDbLoading(false)
+                       }
+                     }}
                     disabled={dbLoading}
                     className="text-xs"
                   >
@@ -985,7 +1084,7 @@ export default function TurkeyMap({
                              updateCityCount(cityName, v)
                        }
                      }}
-                         className="w-20 text-center font-medium border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                         className="w-20 text-center font-semibold border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm bg-white shadow-sm"
                          min="0"
                   />
                        <span className="text-xs text-gray-500 font-medium">mağaza</span>
