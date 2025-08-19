@@ -315,8 +315,9 @@ export default function TurkeyMap({
     try {
       const dbRadii = await getCityRadii()
       setCityRadii(dbRadii)
-      console.log('Veritabanından şehir yarıçapları yüklendi:', dbRadii)
+      console.log('Türkiye haritası - Veritabanından şehir yarıçapları yüklendi:', dbRadii)
       console.log('🔍 Veritabanından gelen yarıçap sayısı:', Object.keys(dbRadii).length)
+      console.log('🔍 Veritabanından gelen şehir isimleri:', Object.keys(dbRadii))
     } catch (error) {
       console.error('Veritabanından yarıçap yükleme hatası:', error)
     } finally {
@@ -473,32 +474,38 @@ export default function TurkeyMap({
     if (!ringsLayer) return
     ringsLayer.innerHTML = ""
 
-    // Sabit yarıçap kullanacak şehirler ve yarıçap değerleri (veritabanından + varsayılan)
-    const fixedRadiusCities: Record<string, number> = {
-      "İstanbul - AVR": cityRadii["İstanbul - AVR"] || 150,
-      "İstanbul - AND": cityRadii["İstanbul - AND"] || 150, 
-      "duzce": cityRadii["Düzce"] || 150,
-      "bursa": cityRadii["Bursa"] || 250,
-      "eskisehir": cityRadii["Eskişehir"] || 250,
-      "diyarbakir": cityRadii["Diyarbakır"] || 375
-    }
-
-    selectedCityIds.forEach((id) => {
-      const dotPos = getDepotDotPosition(id, cities, svg)
-      if (!dotPos) return
-      
-      // Nokta konumunu lat/lon'a çevir (daire bu konumdan çizilsin)
-      const { lat, lon } = svgToLatLon(dotPos.cx, dotPos.cy, svg)
-      const color = getRingColor(id) // Her depo farklı renk
-      const label = humanLabel(id)
-      
-      // Sabit yarıçap kullanacak şehirler için özel yarıçap, diğerleri için kullanıcının seçtiği yarıçap
-      const effectiveRadius = fixedRadiusCities[id] || radiusKm
-      
-      // Debug bilgisi
-      if (fixedRadiusCities[id]) {
-        console.log(`🔍 ${id} şehri için: sabit yarıçap=${effectiveRadius}km`)
-      }
+              selectedCityIds.forEach((id) => {
+       const dotPos = getDepotDotPosition(id, cities, svg)
+       if (!dotPos) return
+       
+       // Nokta konumunu lat/lon'a çevir (daire bu konumdan çizilsin)
+       const { lat, lon } = svgToLatLon(dotPos.cx, dotPos.cy, svg)
+       const color = getRingColor(id) // Her depo farklı renk
+       const label = humanLabel(id)
+       
+       // Veritabanından şehir yarıçapını al (farklı yazım şekillerini dene)
+       const cityName = humanLabel(id)
+       const dbRadius = cityRadii[cityName] || cityRadii[id] || cityRadii[id.toLowerCase()]
+       
+       // Varsayılan yarıçap değerleri
+       const defaultRadius = (() => {
+         if (id === "İstanbul - AVR" || id === "İstanbul - AND") return 150
+         if (id === "duzce") return 150
+         if (id === "bursa") return 250
+         if (id === "eskisehir") return 250
+         if (id === "diyarbakir") return 375
+         return radiusKm // Diğer şehirler için genel yarıçap
+       })()
+       
+       // Veritabanından gelen değer varsa onu kullan, yoksa varsayılan değeri kullan
+       const effectiveRadius = dbRadius || defaultRadius
+       
+       // Debug bilgisi
+       if (dbRadius) {
+         console.log(`🔍 Türkiye haritasında ${id} (${cityName}) şehri için: veritabanından yarıçap=${dbRadius}km`)
+       } else {
+         console.log(`🔍 Türkiye haritasında ${id} (${cityName}) şehri için: varsayılan yarıçap=${defaultRadius}km`)
+       }
       
       const d = geodesicCirclePath(lat, lon, effectiveRadius, svg, 3)
       drawRingWithDot(ringsLayer, dotPos.cx, dotPos.cy, d, color, label)
@@ -672,48 +679,19 @@ export default function TurkeyMap({
     <div className="flex flex-col gap-8">
       <Card>
                  <CardHeader className="flex flex-row items-center justify-between gap-4 p-6 bg-gradient-to-r from-gray-50 to-blue-50 border-b border-gray-200">
-           <div className="flex items-center gap-4">
-             <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-lg border border-gray-200 shadow-sm">
-               <div className="flex items-center gap-2">
-                 <Label htmlFor="header-radius" className="text-sm font-medium text-gray-700">🎯 Kapsama Yarıçapı:</Label>
-                 <div className="relative group">
-                   <span className="text-yellow-600 text-sm cursor-help">⚠️</span>
-                   <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
-                     <div className="text-center">
-                       <div className="font-semibold mb-1">Bilgilendirme</div>
-                       <div>Bu ayar sadece görsel amaçlıdır.</div>
-                       <div>Gerçek yarıçap değişiklikleri için</div>
-                       <div>aşağıdaki depo konumlarını kullanın.</div>
-                     </div>
-                     <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
-                   </div>
-                 </div>
-               </div>
-            <Input
-              id="header-radius"
-              type="number"
-              min={10}
-              max={600}
-              step={10}
-              value={radiusKm}
-              onChange={(e) => setRadiusKm(Number(e.target.value))}
-                 className="w-20 text-center font-medium border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-            />
-               <span className="text-sm font-medium text-gray-600">km</span>
-          </div>
-          
-          <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-lg border border-gray-200 shadow-sm">
-            <Switch 
-              id="exclude-marmara" 
-              checked={excludeMarmara} 
-              onCheckedChange={setExcludeMarmara}
-              className="data-[state=checked]:bg-blue-600"
-            />
-            <Label htmlFor="exclude-marmara" className="text-sm font-medium text-gray-700">
-              🚫 Marmara Bölgesini Katma
-            </Label>
-          </div>
-           </div>
+                       <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-lg border border-gray-200 shadow-sm">
+                <Switch 
+                  id="exclude-marmara" 
+                  checked={excludeMarmara} 
+                  onCheckedChange={setExcludeMarmara}
+                  className="data-[state=checked]:bg-blue-600"
+                />
+                <Label htmlFor="exclude-marmara" className="text-sm font-medium text-gray-700">
+                  🚫 Marmara Bölgesini Katma
+                </Label>
+              </div>
+            </div>
            <div className="flex gap-3">
              <Button 
                variant="outline" 

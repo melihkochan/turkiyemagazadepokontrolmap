@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 
 import { depotCityCoords } from "@/data/depot-coordinates"
 import { depotCityIds as defaultDepots } from "@/data/depot-cities"
+import { getCityRadii, updateCityRadius, clearAllCityRadii } from "@/lib/supabase"
 
 // Leaflet'i client-side only yükle
 const MapContainer = dynamic(() => import("react-leaflet").then(mod => mod.MapContainer), { ssr: false })
@@ -52,11 +53,66 @@ export default function WorldMap({
   const [measurementPoints, setMeasurementPoints] = useState<MeasurementPoint[]>([])
   const [measurementMode, setMeasurementMode] = useState<'air' | 'road'>('air')
   const [excludeMarmara, setExcludeMarmara] = useState(false)
+  const [cityRadii, setCityRadii] = useState<Record<string, number>>({})
+  const [radiusLoading, setRadiusLoading] = useState(false)
   const mapRef = useRef<any>(null)
 
   useEffect(() => {
     setIsClient(true)
   }, [])
+
+  // Component mount olduğunda veritabanından yarıçap verilerini yükle
+  useEffect(() => {
+    loadRadiiFromDatabase()
+  }, [])
+
+  const loadRadiiFromDatabase = async () => {
+    setRadiusLoading(true)
+    try {
+      const dbRadii = await getCityRadii()
+      setCityRadii(dbRadii)
+      console.log('Dünya haritası - Veritabanından şehir yarıçapları yüklendi:', dbRadii)
+      console.log('🔍 Veritabanından gelen yarıçap sayısı:', Object.keys(dbRadii).length)
+      console.log('🔍 Veritabanından gelen şehir isimleri:', Object.keys(dbRadii))
+    } catch (error) {
+      console.error('Veritabanından yarıçap yükleme hatası:', error)
+    } finally {
+      setRadiusLoading(false)
+    }
+  }
+
+  // Debounce için timeout'ları sakla
+  const radiusUpdateTimeouts = useRef<Record<string, NodeJS.Timeout>>({})
+
+  // Şehir yarıçap değerini güncelle (debounced)
+  const updateCityRadiusHandler = async (cityName: string, newRadius: number) => {
+    // Önceki timeout'u temizle
+    if (radiusUpdateTimeouts.current[cityName]) {
+      clearTimeout(radiusUpdateTimeouts.current[cityName])
+    }
+
+    // Yeni timeout ayarla (500ms sonra güncelle)
+    radiusUpdateTimeouts.current[cityName] = setTimeout(async () => {
+      console.log('Dünya haritası - Yarıçap güncelleme başlatılıyor:', { cityName, newRadius })
+      setRadiusLoading(true)
+      try {
+        const success = await updateCityRadius(cityName, newRadius)
+        console.log('Dünya haritası - Yarıçap güncelleme sonucu:', success)
+        
+        if (success) {
+          // Sadece state'i güncelle, useEffect otomatik olarak daireleri güncelleyecek
+          setCityRadii(prev => ({ ...prev, [cityName]: newRadius }))
+          console.log(`${cityName} şehri için yarıçap güncellendi: ${newRadius}km`)
+        } else {
+          console.error(`${cityName} şehri için yarıçap güncellenemedi`)
+        }
+      } catch (error) {
+        console.error('Yarıçap güncelleme hatası:', error)
+      } finally {
+        setRadiusLoading(false)
+      }
+    }, 500) // 500ms debounce
+  }
 
   const getRingColor = (id: string) => {
     const idx = defaultSelectedCityIds.indexOf(id)
@@ -66,7 +122,27 @@ export default function WorldMap({
   const humanLabel = (id: string) => {
     if (id === "istanbul-avr") return "İstanbul - AVR"
     if (id === "istanbul-and") return "İstanbul - AND"
-    return id.charAt(0).toUpperCase() + id.slice(1)
+    
+    // Türkçe karakter düzeltmeleri
+    const cityNameMap: Record<string, string> = {
+      "izmir": "İzmir",
+      "mugla": "Muğla",
+      "duzce": "Düzce",
+      "bursa": "Bursa",
+      "eskisehir": "Eskişehir",
+      "diyarbakir": "Diyarbakır",
+      "ankara": "Ankara",
+      "adana": "Adana",
+      "antalya": "Antalya",
+      "gaziantep": "Gaziantep",
+      "konya": "Konya",
+      "kayseri": "Kayseri",
+      "samsun": "Samsun",
+      "trabzon": "Trabzon",
+      "erzurum": "Erzurum"
+    }
+    
+    return cityNameMap[id] || id.charAt(0).toUpperCase() + id.slice(1)
   }
 
   // Mesafe hesaplama fonksiyonu
@@ -191,25 +267,37 @@ export default function WorldMap({
                 const coord = depotCityCoords[id]
                 if (!coord) return null
                 
-                // Sabit yarıçap kullanacak şehirler ve yarıçap değerleri (veritabanından + varsayılan)
-                const fixedRadiusCities: Record<string, number> = {
-                  "İstanbul - AVR": 150, // Dünya haritasında sabit kalacak
-                  "İstanbul - AND": 150, 
-                  "duzce": 150,
-                  "bursa": 250,
-                  "eskisehir": 250,
-                  "diyarbakir": 375
-                }
-                
-                const color = getRingColor(id) // Her depo farklı renk
-                // Sabit yarıçap kullanacak şehirler için özel yarıçap, diğerleri için kullanıcının seçtiği yarıçap
-                const effectiveRadius = fixedRadiusCities[id] || radiusKm
+                                                  const color = getRingColor(id) // Her depo farklı renk
+                 
+                 // Veritabanından şehir yarıçapını al (farklı yazım şekillerini dene)
+                 const cityName = humanLabel(id)
+                 const dbRadius = cityRadii[cityName] || cityRadii[id] || cityRadii[id.toLowerCase()]
+                 
+                 // Varsayılan yarıçap değerleri
+                 const defaultRadius = (() => {
+                   if (id === "İstanbul - AVR" || id === "İstanbul - AND") return 150
+                   if (id === "duzce") return 150
+                   if (id === "bursa") return 250
+                   if (id === "eskisehir") return 250
+                   if (id === "diyarbakir") return 375
+                   return radiusKm // Diğer şehirler için genel yarıçap
+                 })()
+                 
+                 // Veritabanından gelen değer varsa onu kullan, yoksa varsayılan değeri kullan
+                 const effectiveRadius = dbRadius || defaultRadius
+                 
+                 // Debug bilgisi
+                 if (dbRadius) {
+                   console.log(`🔍 Dünya haritasında ${id} (${cityName}) şehri için: veritabanından yarıçap=${dbRadius}km`)
+                 } else {
+                   console.log(`🔍 Dünya haritasında ${id} (${cityName}) şehri için: varsayılan yarıçap=${defaultRadius}km`)
+                 }
                 const radiusMeters = effectiveRadius * 1000 / 3.5 // 3.5 çarpanı karayolu mesafesi için
                 
-                // Debug bilgisi
-                if (fixedRadiusCities[id]) {
-                  console.log(`🔍 Dünya haritasında ${id} şehri için: sabit yarıçap=${effectiveRadius}km`)
-                }
+                                 // Debug bilgisi
+                 if (dbRadius) {
+                   console.log(`🔍 Dünya haritasında ${id} şehri için: veritabanından yarıçap=${effectiveRadius}km`)
+                 }
                 
                 return (
                   <div key={id}>
@@ -442,42 +530,7 @@ export default function WorldMap({
             />
           </div>
 
-          <div className="flex items-center justify-between bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <span className="text-blue-600 text-lg">🎯</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Label htmlFor="world-radius" className="text-base font-medium text-gray-800">Görselleştirme Yarıçapı</Label>
-                <div className="relative group">
-                  <span className="text-yellow-600 text-sm cursor-help">⚠️</span>
-                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
-                    <div className="text-center">
-                      <div className="font-semibold mb-1">Bilgilendirme</div>
-                      <div>Bu ayar sadece görsel amaçlıdır.</div>
-                      <div>Gerçek yarıçap değişiklikleri için</div>
-                      <div>depo konumlarını düzenleyin.</div>
-                    </div>
-                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
-                  </div>
-                </div>
-              </div>
-              <p className="text-sm text-gray-500">Dünya haritasında görsel yarıçap boyutu</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <Input
-                id="world-radius"
-                type="number"
-                min={50}
-                max={500}
-                step={50}
-                value={radiusKm}
-                onChange={(e) => setRadiusKm(Number(e.target.value))}
-                className="w-32 text-center font-medium border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-              />
-              <span className="text-sm font-medium text-gray-600">km</span>
-            </div>
-          </div>
+          
 
           <div className="flex items-center justify-between bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
             <div className="flex items-center gap-3">
@@ -499,32 +552,63 @@ export default function WorldMap({
 
 
 
-          <div className="space-y-3">
-            <Label>Depo Konumları (Global Koordinatlar)</Label>
-            <div className="flex flex-wrap gap-2">
-              {defaultSelectedCityIds.map((id) => {
-                const coord = depotCityCoords[id]
-                const color = getRingColor(id) // Her depo farklı renk
-                const storeCount = storeCounts && storeCounts[id] ? storeCounts[id] : 0
-                return (
-                  <Badge 
-                    key={id} 
-                    variant="secondary" 
-                    className="text-xs flex flex-col items-center p-2"
-                    style={{ borderColor: color, minWidth: '120px' }}
-                  >
-                    <div style={{ color, fontWeight: 'bold' }}>{humanLabel(id)}</div>
-                    {coord && (
-                      <div className="text-gray-600">
-                        ({coord.lat.toFixed(3)}, {coord.lon.toFixed(3)})
+                     <div className="space-y-4">
+             <div className="flex items-center justify-between">
+               <Label className="text-lg font-semibold text-gray-800">📍 Depo Konumları</Label>
+               <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                 {defaultSelectedCityIds.length} Depo
+               </Badge>
+             </div>
+             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+               {defaultSelectedCityIds.map((id) => {
+                 const coord = depotCityCoords[id]
+                 const cityName = humanLabel(id)
+                 const currentRadius = cityRadii[cityName] || (() => {
+                   // Varsayılan yarıçap değerleri
+                   if (id === "İstanbul - AVR" || id === "İstanbul - AND") return 150
+                   if (id === "duzce") return 150
+                   if (id === "bursa") return 250
+                   if (id === "eskisehir") return 250
+                   if (id === "diyarbakir") return 375
+                   return radiusKm // Diğer şehirler için genel yarıçap
+                 })()
+                 
+                 return (
+                    <div key={id} className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-3 border border-gray-200 hover:border-blue-300 transition-all duration-200 hover:shadow-md">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-800">{cityName}</span>
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                       </div>
-                    )}
-
-                  </Badge>
-                )
-              })}
-            </div>
-          </div>
+                      {coord && (
+                        <div className="text-xs text-gray-600 font-mono bg-white px-2 py-1 rounded border mb-2">
+                          {coord.lat.toFixed(3)}, {coord.lon.toFixed(3)}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          value={currentRadius}
+                          onChange={(e) => {
+                            const v = Number(e.target.value)
+                            if (Number.isFinite(v) && v > 0) {
+                              // Anında state'i güncelle (UI'da hemen görünsün)
+                              setCityRadii(prev => ({ ...prev, [cityName]: v }))
+                              // Veritabanına kaydetmeyi geciktir
+                              updateCityRadiusHandler(cityName, v)
+                            }
+                          }}
+                          className="w-20 text-center font-semibold border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm bg-white shadow-sm"
+                          min="10"
+                          max="1000"
+                          step="10"
+                        />
+                        <span className="text-sm text-gray-700 font-semibold">km</span>
+                      </div>
+                    </div>
+                 )
+               })}
+             </div>
+           </div>
         </CardContent>
       </Card>
     </div>
