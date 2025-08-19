@@ -422,12 +422,15 @@ export default function TurkeyMap({
     if (!ringsLayer) return
     ringsLayer.innerHTML = ""
 
-    // Marmara bölgesinde kapsama yarıçapı hesaplamasından hariç tutulacak şehirler
-    const excludedFromRadius = new Set([
-      "İstanbul - AVR",
-      "İstanbul - AND", 
-      "duzce"
-    ])
+    // Sabit yarıçap kullanacak şehirler ve yarıçap değerleri
+    const fixedRadiusCities: Record<string, number> = {
+      "İstanbul - AVR": 150,
+      "İstanbul - AND": 150, 
+      "duzce": 150,
+      "bursa": 250,
+      "eskisehir": 250,
+      "diyarbakir": 375
+    }
 
     selectedCityIds.forEach((id) => {
       const dotPos = getDepotDotPosition(id, cities, svg)
@@ -438,12 +441,12 @@ export default function TurkeyMap({
       const color = getRingColor(id) // Her depo farklı renk
       const label = humanLabel(id)
       
-      // Marmara bölgesindeki hariç tutulan şehirler için sabit yarıçap kullan (sadece excludeMarmara aktifse)
-      const effectiveRadius = (excludeMarmara && excludedFromRadius.has(id)) ? 150 : radiusKm
+      // Sabit yarıçap kullanacak şehirler için özel yarıçap, diğerleri için kullanıcının seçtiği yarıçap
+      const effectiveRadius = fixedRadiusCities[id] || radiusKm
       
       // Debug bilgisi
-      if (excludedFromRadius.has(id)) {
-        console.log(`🔍 ${id} şehri için: excludeMarmara=${excludeMarmara}, effectiveRadius=${effectiveRadius}km`)
+      if (fixedRadiusCities[id]) {
+        console.log(`🔍 ${id} şehri için: sabit yarıçap=${effectiveRadius}km`)
       }
       
       const d = geodesicCirclePath(lat, lon, effectiveRadius, svg, 3)
