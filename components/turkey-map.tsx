@@ -748,11 +748,15 @@ export default function TurkeyMap({
                   >
                     <option value="">Şehir seçin...</option>
                     {[
-                      // Tüm Türkiye şehirleri
-                      "Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Aksaray", "Amasya", "Ankara", "Antalya", "Ardahan", "Artvin", "Aydın", "Balıkesir", "Bartın", "Batman", "Bayburt", "Bilecik", "Bingöl", "Bitlis", "Bolu", "Burdur", "Bursa", "Çanakkale", "Çankırı", "Çorum", "Denizli", "Diyarbakır", "Düzce", "Edirne", "Elazığ", "Erzincan", "Erzurum", "Eskişehir", "Gaziantep", "Giresun", "Gümüşhane", "Hakkari", "Hatay", "Iğdır", "Isparta", "İstanbul", "İzmir", "Kahramanmaraş", "Karabük", "Karaman", "Kars", "Kastamonu", "Kayseri", "Kırıkkale", "Kırklareli", "Kırşehir", "Kilis", "Kocaeli", "Konya", "Kütahya", "Malatya", "Manisa", "Mardin", "Mersin", "Muğla", "Muş", "Nevşehir", "Niğde", "Ordu", "Osmaniye", "Rize", "Sakarya", "Samsun", "Şanlıurfa", "Siirt", "Sinop", "Sivas", "Şırnak", "Tekirdağ", "Tokat", "Trabzon", "Tunceli", "Uşak", "Van", "Yalova", "Yozgat", "Zonguldak"
+                      // Tüm Türkiye şehirleri (alfabetik sırada)
+                      "Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Aksaray", "Amasya", "Ankara", "Antalya", "Ardahan", "Artvin", "Aydın", "Balıkesir", "Bartın", "Batman", "Bayburt", "Bilecik", "Bingöl", "Bitlis", "Bolu", "Burdur", "Bursa", "Çanakkale", "Çankırı", "Çorum", "Denizli", "Diyarbakır", "Düzce", "Edirne", "Elazığ", "Erzincan", "Erzurum", "Eskişehir", "Gaziantep", "Giresun", "Gümüşhane", "Hakkari", "Hatay", "Iğdır", "Isparta", "İstanbul - AVR", "İstanbul - AND", "İzmir", "Kahramanmaraş", "Karabük", "Karaman", "Kars", "Kastamonu", "Kayseri", "Kırıkkale", "Kırklareli", "Kırşehir", "Kilis", "Kocaeli", "Konya", "Kütahya", "Malatya", "Manisa", "Mardin", "Mersin", "Muğla", "Muş", "Nevşehir", "Niğde", "Ordu", "Osmaniye", "Rize", "Sakarya", "Samsun", "Şanlıurfa", "Siirt", "Sinop", "Sivas", "Şırnak", "Tekirdağ", "Tokat", "Trabzon", "Tunceli", "Uşak", "Van", "Yalova", "Yozgat", "Zonguldak"
                     ].map((cityName) => {
                       const defaultColor = (() => {
-                        // Veritabanından gelen default renkleri kullan
+                        // Özel İstanbul kodları için özel renk hesaplama
+                        if (cityName === "İstanbul - AVR" || cityName === "İstanbul - AND") {
+                          return defaultColors[cityName] || cityColors[cityName] || referenceColors['istanbul'] || '#d1d5db'
+                        }
+                        // Normal şehirler için
                         return defaultColors[cityName.toLowerCase()] || cityColors[cityName.toLowerCase()] || referenceColors[cityName.toLowerCase()] || '#d1d5db'
                       })()
                       
@@ -773,13 +777,27 @@ export default function TurkeyMap({
                       <div 
                         className="w-12 h-12 rounded-xl border-2 border-gray-300 shadow-lg" 
                         style={{ 
-                          backgroundColor: cityColors[selectedCityForColor] || defaultColors[selectedCityForColor.toLowerCase()] || referenceColors[selectedCityForColor.toLowerCase()] || '#d1d5db'
+                          backgroundColor: (() => {
+                            // Özel İstanbul kodları için özel renk hesaplama
+                            if (selectedCityForColor === "İstanbul - AVR" || selectedCityForColor === "İstanbul - AND") {
+                              return cityColors[selectedCityForColor] || defaultColors[selectedCityForColor] || referenceColors['istanbul'] || '#d1d5db'
+                            }
+                            // Normal şehirler için
+                            return cityColors[selectedCityForColor] || defaultColors[selectedCityForColor.toLowerCase()] || referenceColors[selectedCityForColor.toLowerCase()] || '#d1d5db'
+                          })()
                         }}
                       />
                       <div className="flex-1">
                         <div className="text-sm font-bold text-gray-800 mb-1">{selectedCityForColor}</div>
                         <code className="text-xs font-mono text-gray-600 bg-white px-2 py-1 rounded border">
-                          {cityColors[selectedCityForColor] || defaultColors[selectedCityForColor.toLowerCase()] || referenceColors[selectedCityForColor.toLowerCase()] || 'Veritabanında kayıtlı değil'}
+                          {(() => {
+                            // Özel İstanbul kodları için özel renk hesaplama
+                            if (selectedCityForColor === "İstanbul - AVR" || selectedCityForColor === "İstanbul - AND") {
+                              return cityColors[selectedCityForColor] || defaultColors[selectedCityForColor] || referenceColors['istanbul'] || 'Veritabanında kayıtlı değil'
+                            }
+                            // Normal şehirler için
+                            return cityColors[selectedCityForColor] || defaultColors[selectedCityForColor.toLowerCase()] || referenceColors[selectedCityForColor.toLowerCase()] || 'Veritabanında kayıtlı değil'
+                          })()}
                         </code>
                       </div>
                     </div>
@@ -1035,10 +1053,17 @@ export default function TurkeyMap({
 
                          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                {[
-                 // Tüm Türkiye şehirleri
-                 "Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Aksaray", "Amasya", "Ankara", "Antalya", "Ardahan", "Artvin", "Aydın", "Balıkesir", "Bartın", "Batman", "Bayburt", "Bilecik", "Bingöl", "Bitlis", "Bolu", "Burdur", "Bursa", "Çanakkale", "Çankırı", "Çorum", "Denizli", "Diyarbakır", "Düzce", "Edirne", "Elazığ", "Erzincan", "Erzurum", "Eskişehir", "Gaziantep", "Giresun", "Gümüşhane", "Hakkari", "Hatay", "Iğdır", "Isparta", "İstanbul", "İzmir", "Kahramanmaraş", "Karabük", "Karaman", "Kars", "Kastamonu", "Kayseri", "Kırıkkale", "Kırklareli", "Kırşehir", "Kilis", "Kocaeli", "Konya", "Kütahya", "Malatya", "Manisa", "Mardin", "Mersin", "Muğla", "Muş", "Nevşehir", "Niğde", "Ordu", "Osmaniye", "Rize", "Sakarya", "Samsun", "Şanlıurfa", "Siirt", "Sinop", "Sivas", "Şırnak", "Tekirdağ", "Tokat", "Trabzon", "Tunceli", "Uşak", "Van", "Yalova", "Yozgat", "Zonguldak"
+                 // Tüm Türkiye şehirleri (alfabetik sırada)
+                 "Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Aksaray", "Amasya", "Ankara", "Antalya", "Ardahan", "Artvin", "Aydın", "Balıkesir", "Bartın", "Batman", "Bayburt", "Bilecik", "Bingöl", "Bitlis", "Bolu", "Burdur", "Bursa", "Çanakkale", "Çankırı", "Çorum", "Denizli", "Diyarbakır", "Düzce", "Edirne", "Elazığ", "Erzincan", "Erzurum", "Eskişehir", "Gaziantep", "Giresun", "Gümüşhane", "Hakkari", "Hatay", "Iğdır", "Isparta", "İstanbul - AVR", "İstanbul - AND", "İzmir", "Kahramanmaraş", "Karabük", "Karaman", "Kars", "Kastamonu", "Kayseri", "Kırıkkale", "Kırklareli", "Kırşehir", "Kilis", "Kocaeli", "Konya", "Kütahya", "Malatya", "Manisa", "Mardin", "Mersin", "Muğla", "Muş", "Nevşehir", "Niğde", "Ordu", "Osmaniye", "Rize", "Sakarya", "Samsun", "Şanlıurfa", "Siirt", "Sinop", "Sivas", "Şırnak", "Tekirdağ", "Tokat", "Trabzon", "Tunceli", "Uşak", "Van", "Yalova", "Yozgat", "Zonguldak"
                ].map((cityName) => {
-                 const displayColor = cityColors[cityName.toLowerCase()] || defaultColors[cityName.toLowerCase()] || referenceColors[cityName.toLowerCase()] || '#d1d5db'
+                                    const displayColor = (() => {
+                     // Özel İstanbul kodları için özel renk hesaplama
+                     if (cityName === "İstanbul - AVR" || cityName === "İstanbul - AND") {
+                       return cityColors[cityName] || defaultColors[cityName] || referenceColors['istanbul'] || '#d1d5db'
+                     }
+                     // Normal şehirler için
+                     return cityColors[cityName.toLowerCase()] || defaultColors[cityName.toLowerCase()] || referenceColors[cityName.toLowerCase()] || '#d1d5db'
+                   })()
                  
                  return (
                    <div key={cityName} className="bg-white rounded-lg p-4 border border-gray-200 hover:border-blue-300 transition-all duration-200 hover:shadow-md group">
